@@ -24,7 +24,7 @@ services:
     # containrrr/watchtower was archived 2025-12-17 and no longer speaks the
     # Docker API version modern engines require. nickfedor/watchtower is the
     # maintained drop-in replacement (same flags and env vars).
-    image: ghcr.io/nickfedor/watchtower:latest
+    image: ghcr.io/nicholas-fedor/watchtower:latest
     container_name: kanban-watchtower
     restart: unless-stopped
     volumes:
