@@ -1,0 +1,20 @@
+# Cloudflare Tunnel for remote access to kanban (and other home apps).
+# Deploy this as its OWN stack in Dockge (separate from the kanban stack).
+#
+# The TUNNEL_TOKEN is a SECRET — do NOT hardcode it here or commit it.
+# Set it in Dockge's stack "Environment" / .env field, or create a sibling
+# .env file (gitignored) containing:  TUNNEL_TOKEN=eyJ...your token...
+#
+# You get the token from the Cloudflare Zero Trust dashboard when you create
+# the tunnel (Networks -> Tunnels -> Create a tunnel -> Cloudflared). Public
+# hostnames (todo.elovitz.net -> http://<server-ip>:3030) and the Access login
+# policy are all configured in the Cloudflare dashboard, not in this file.
+
+services:
+  cloudflared:
+    image: cloudflare/cloudflared:latest
+    container_name: cloudflared
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      - TUNNEL_TOKEN=${TUNNEL_TOKEN}
