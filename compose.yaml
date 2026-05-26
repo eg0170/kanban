@@ -1,0 +1,35 @@
+services:
+  kanban:
+    image: ghcr.io/eg0170/kanban:latest
+    container_name: kanban
+    restart: unless-stopped
+    ports:
+      - "3000:3000"
+    volumes:
+      - kanban-data:/data
+    environment:
+      - PORT=3000
+      - DB_PATH=/data/kanban.db
+      # Optional first-run seed defaults (applied only when the DB is empty).
+      # You can also set these in the app: rename people in Settings, edit
+      # categories in the Categories dialog.
+      # - DEFAULT_PERSON1=Person 1
+      # - DEFAULT_PERSON2=Person 2
+      # - DEFAULT_CATEGORIES=Home,Health,Work,Errands
+    labels:
+      # Opt this container in to Watchtower auto-updates.
+      - "com.centurylinklabs.watchtower.enable=true"
+
+  watchtower:
+    image: containrrr/watchtower
+    container_name: kanban-watchtower
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: --label-enable --cleanup --interval 300
+    # --label-enable  : only update containers that opt in via the label above
+    # --cleanup       : remove the old image after a successful update
+    # --interval 300  : check GHCR for a new image every 5 minutes
+
+volumes:
+  kanban-data:
