@@ -18,6 +18,7 @@ const state = {
   },
   filter: { owner: "all", category: "all" },
   showArchived: false,
+  selected: new Set(),
 };
 
 const $ = (sel) => document.querySelector(sel);
@@ -52,9 +53,13 @@ async function loadAll() {
   state.tasks = tasks;
   state.categories = categories;
   state.settings = settings;
+  // Drop selections for tasks that no longer exist.
+  const ids = new Set(tasks.map((t) => t.id));
+  [...state.selected].forEach((id) => { if (!ids.has(id)) state.selected.delete(id); });
   syncOwnerLabels();
   renderCategoryFilter();
   renderBoard();
+  renderBulkBar();
 }
 
 function syncOwnerLabels() {
@@ -130,10 +135,82 @@ async function clearDone() {
   await loadAll();
 }
 
+// ---------- Multi-select & bulk edit ----------
+function toggleSelect(id) {
+  if (state.selected.has(id)) state.selected.delete(id);
+  else state.selected.add(id);
+  document
+    .querySelectorAll(`.card[data-id="${id}"]`)
+    .forEach((c) => c.classList.toggle("selected", state.selected.has(id)));
+  renderBulkBar();
+}
+
+function clearSelection() {
+  state.selected.clear();
+  document.querySelectorAll(".card.selected").forEach((c) => c.classList.remove("selected"));
+  renderBulkBar();
+}
+
+function renderBulkBar() {
+  const n = state.selected.size;
+  $("#bulk-bar").hidden = n === 0;
+  $("#bulk-count").textContent = `${n} selected`;
+}
+
+function openBulkDialog() {
+  if (state.selected.size === 0) return;
+  $("#bulk-dialog-count").textContent = state.selected.size;
+  // Category: leave-unchanged / none / each category.
+  $("#bulk-category").innerHTML =
+    `<option value="">(leave unchanged)</option><option value="none">— none —</option>` +
+    state.categories.map((c) => `<option value="${c.id}">${escapeHtml(c.name)}</option>`).join("");
+  // Owner: leave-unchanged / the owners.
+  $("#bulk-owner").innerHTML =
+    `<option value="">(leave unchanged)</option>
+     <option value="unassigned">Unassigned</option>
+     <option value="joint">Joint</option>
+     <option value="p1">${escapeHtml(state.settings.person1)}</option>
+     <option value="p2">${escapeHtml(state.settings.person2)}</option>`;
+  $("#bulk-priority").value = "";
+  $("#bulk-status").value = "";
+  $("#bulk-due-mode").value = "";
+  $("#bulk-due").value = "";
+  $("#bulk-due").disabled = true;
+  $("#bulk-dialog").showModal();
+}
+
+$("#bulk-due-mode").addEventListener("change", (e) => {
+  $("#bulk-due").disabled = e.target.value !== "set";
+});
+
+$("#bulk-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const payload = {};
+  const cat = $("#bulk-category").value;
+  if (cat === "none") payload.category_id = null;
+  else if (cat) payload.category_id = Number(cat);
+  if ($("#bulk-priority").value) payload.priority = $("#bulk-priority").value;
+  if ($("#bulk-owner").value) payload.owner = $("#bulk-owner").value;
+  if ($("#bulk-status").value) payload.status = $("#bulk-status").value;
+  const dueMode = $("#bulk-due-mode").value;
+  if (dueMode === "clear") payload.due_date = null;
+  else if (dueMode === "set") payload.due_date = $("#bulk-due").value || null;
+
+  if (Object.keys(payload).length === 0) {
+    $("#bulk-dialog").close();
+    return;
+  }
+  await Promise.all([...state.selected].map((id) => api.send("PUT", `/api/tasks/${id}`, payload)));
+  state.selected.clear();
+  $("#bulk-dialog").close();
+  await loadAll();
+});
+
 function cardEl(t, isArchived = false) {
   const cat = categoryById(t.category_id);
   const card = document.createElement("div");
   card.className = "card" + (isArchived ? " archived" : "");
+  if (!isArchived && state.selected.has(t.id)) card.classList.add("selected");
   if (!isArchived) card.draggable = true;
   card.dataset.id = t.id;
   if (cat) card.style.setProperty("--cat-color", cat.color);
@@ -156,6 +233,11 @@ function cardEl(t, isArchived = false) {
 
   card.addEventListener("click", (e) => {
     if (e.target.closest(".restore")) return;
+    if (!isArchived && (e.shiftKey || e.metaKey || e.ctrlKey)) {
+      e.preventDefault();
+      toggleSelect(t.id);
+      return;
+    }
     openTaskDialog(t);
   });
 
@@ -329,6 +411,8 @@ $("#btn-settings").addEventListener("click", () => {
   $("#set-color-unassigned").value = state.settings.color_unassigned;
   $("#settings-dialog").showModal();
 });
+$("#bulk-edit").addEventListener("click", openBulkDialog);
+$("#bulk-clear").addEventListener("click", clearSelection);
 $("#filter-owner").addEventListener("change", (e) => { state.filter.owner = e.target.value; renderBoard(); });
 $("#filter-category").addEventListener("change", (e) => { state.filter.category = e.target.value; renderBoard(); });
 document.querySelectorAll(".dialog-close").forEach((b) =>

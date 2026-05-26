@@ -31,6 +31,13 @@
 
   <main id="board"></main>
 
+  <!-- Multi-select action bar -->
+  <div id="bulk-bar" hidden>
+    <span id="bulk-count">0 selected</span>
+    <button id="bulk-edit" class="primary">Edit selected</button>
+    <button id="bulk-clear">Clear</button>
+  </div>
+
   <!-- Task dialog -->
   <dialog id="task-dialog">
     <form method="dialog" id="task-form">
@@ -65,6 +72,52 @@
         <span class="spacer"></span>
         <button type="button" class="dialog-close">Cancel</button>
         <button type="submit" class="primary">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Bulk edit dialog -->
+  <dialog id="bulk-dialog">
+    <form id="bulk-form">
+      <h2>Edit <span id="bulk-dialog-count"></span> tasks</h2>
+      <p class="section-label">Only the fields you change are applied; the rest are left as-is.</p>
+      <div class="row">
+        <label>Category<select id="bulk-category"></select></label>
+        <label>Priority
+          <select id="bulk-priority">
+            <option value="">(leave unchanged)</option>
+            <option value="low">Low</option>
+            <option value="medium">Medium</option>
+            <option value="high">High</option>
+          </select>
+        </label>
+      </div>
+      <div class="row">
+        <label>Owner<select id="bulk-owner"></select></label>
+        <label>Status
+          <select id="bulk-status">
+            <option value="">(leave unchanged)</option>
+            <option value="backlog">Backlog</option>
+            <option value="todo">To Do</option>
+            <option value="in_progress">In Progress</option>
+            <option value="done">Done</option>
+          </select>
+        </label>
+      </div>
+      <div class="row">
+        <label>Due date
+          <select id="bulk-due-mode">
+            <option value="">(leave unchanged)</option>
+            <option value="set">Set to…</option>
+            <option value="clear">Clear</option>
+          </select>
+        </label>
+        <label>&nbsp;<input type="date" id="bulk-due" disabled /></label>
+      </div>
+      <div class="dialog-actions">
+        <span class="spacer"></span>
+        <button type="button" class="dialog-close">Cancel</button>
+        <button type="submit" class="primary">Apply</button>
       </div>
     </form>
   </dialog>
