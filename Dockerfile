@@ -8,8 +8,10 @@ RUN apt-get update \
   && apt-get install -y --no-install-recommends python3 make g++ \
   && rm -rf /var/lib/apt/lists/*
 
-COPY package.json ./
-RUN npm install --omit=dev \
+# Copy the lockfile too and use `npm ci` so builds install the EXACT pinned
+# dependency versions (reproducible, tamper-evident) rather than re-resolving.
+COPY package.json package-lock.json ./
+RUN npm ci --omit=dev \
   && apt-get purge -y python3 make g++ && apt-get autoremove -y
 
 COPY . .
