@@ -1,0 +1,101 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Household Kanban</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <header>
+    <h1>Household Kanban</h1>
+    <div class="filters">
+      <label>Owner
+        <select id="filter-owner">
+          <option value="all">Everyone</option>
+          <option value="joint">Joint</option>
+          <option value="p1"></option>
+          <option value="p2"></option>
+        </select>
+      </label>
+      <label>Category
+        <select id="filter-category"><option value="all">All</option></select>
+      </label>
+      <button id="btn-add" class="primary">+ New task</button>
+      <button id="btn-categories">Categories</button>
+      <button id="btn-settings">Settings</button>
+    </div>
+  </header>
+
+  <main id="board"></main>
+
+  <!-- Task dialog -->
+  <dialog id="task-dialog">
+    <form method="dialog" id="task-form">
+      <h2 id="task-dialog-title">New task</h2>
+      <input type="hidden" id="task-id" />
+      <label>Title<input id="task-title" required maxlength="200" /></label>
+      <label>Notes<textarea id="task-notes" rows="3"></textarea></label>
+      <div class="row">
+        <label>Category<select id="task-category"></select></label>
+        <label>Priority
+          <select id="task-priority">
+            <option value="low">Low</option>
+            <option value="medium" selected>Medium</option>
+            <option value="high">High</option>
+          </select>
+        </label>
+      </div>
+      <div class="row">
+        <label>Owner<select id="task-owner"></select></label>
+        <label>Status
+          <select id="task-status">
+            <option value="backlog">Backlog</option>
+            <option value="todo">To Do</option>
+            <option value="in_progress">In Progress</option>
+            <option value="done">Done</option>
+          </select>
+        </label>
+        <label>Due date<input type="date" id="task-due" /></label>
+      </div>
+      <div class="dialog-actions">
+        <button type="button" id="task-delete" class="danger" hidden>Delete</button>
+        <span class="spacer"></span>
+        <button type="button" class="dialog-close">Cancel</button>
+        <button type="submit" class="primary">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <!-- Categories dialog -->
+  <dialog id="cat-dialog">
+    <h2>Categories</h2>
+    <ul id="cat-list"></ul>
+    <form id="cat-add-form" class="cat-add">
+      <input id="cat-new-name" placeholder="New category" maxlength="40" />
+      <input type="color" id="cat-new-color" value="#6b7280" />
+      <button type="submit" class="primary">Add</button>
+    </form>
+    <div class="dialog-actions">
+      <span class="spacer"></span>
+      <button type="button" class="dialog-close">Close</button>
+    </div>
+  </dialog>
+
+  <!-- Settings dialog -->
+  <dialog id="settings-dialog">
+    <form id="settings-form">
+      <h2>Settings</h2>
+      <label>Person 1 name<input id="set-p1" maxlength="40" /></label>
+      <label>Person 2 name<input id="set-p2" maxlength="40" /></label>
+      <div class="dialog-actions">
+        <span class="spacer"></span>
+        <button type="button" class="dialog-close">Cancel</button>
+        <button type="submit" class="primary">Save</button>
+      </div>
+    </form>
+  </dialog>
+
+  <script src="app.js"></script>
+</body>
+</html>
