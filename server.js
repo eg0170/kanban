@@ -12,6 +12,15 @@ const STATUSES = ["backlog", "todo", "in_progress", "done"];
 const PRIORITIES = ["low", "medium", "high"];
 const OWNERS = ["unassigned", "joint", "p1", "p2"];
 
+// Owner/status coupling: an unassigned task belongs in the backlog grab pile;
+// the moment it has an owner it shouldn't sit in backlog, so it moves to To Do.
+// Tasks already past To Do (in progress / done) keep their status when owned.
+function coupleStatus(owner, status) {
+  if (owner === "unassigned") return "backlog";
+  if (status === "backlog") return "todo";
+  return status;
+}
+
 // ---- Settings (person names) ----
 function getSettings() {
   const rows = db.prepare("SELECT key, value FROM settings").all();
@@ -76,9 +85,10 @@ app.get("/api/tasks", (_req, res) => {
 app.post("/api/tasks", (req, res) => {
   const { title } = req.body;
   if (!title || !title.trim()) return res.status(400).json({ error: "title required" });
-  const status = STATUSES.includes(req.body.status) ? req.body.status : "backlog";
+  const rawStatus = STATUSES.includes(req.body.status) ? req.body.status : "backlog";
   const priority = PRIORITIES.includes(req.body.priority) ? req.body.priority : "medium";
   const owner = OWNERS.includes(req.body.owner) ? req.body.owner : "unassigned";
+  const status = coupleStatus(owner, rawStatus);
   const pos = db
     .prepare("SELECT COALESCE(MAX(position), -1) + 1 AS p FROM tasks WHERE status = ?")
     .get(status).p;
@@ -104,6 +114,8 @@ app.put("/api/tasks/:id", (req, res) => {
   const t = db.prepare("SELECT * FROM tasks WHERE id = ?").get(req.params.id);
   if (!t) return res.status(404).json({ error: "not found" });
   const b = req.body;
+  const owner = OWNERS.includes(b.owner) ? b.owner : t.owner;
+  const status = coupleStatus(owner, STATUSES.includes(b.status) ? b.status : t.status);
   db.prepare(
     `UPDATE tasks SET
        title = ?, notes = ?, category_id = ?, priority = ?, owner = ?,
@@ -114,8 +126,8 @@ app.put("/api/tasks/:id", (req, res) => {
     b.notes ?? t.notes,
     b.category_id === undefined ? t.category_id : b.category_id || null,
     PRIORITIES.includes(b.priority) ? b.priority : t.priority,
-    OWNERS.includes(b.owner) ? b.owner : t.owner,
-    STATUSES.includes(b.status) ? b.status : t.status,
+    owner,
+    status,
     b.due_date === undefined ? t.due_date : b.due_date || null,
     req.params.id
   );
