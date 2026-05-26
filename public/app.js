@@ -28,6 +28,7 @@ const api = {
 function ownerName(owner) {
   if (owner === "p1") return state.settings.person1;
   if (owner === "p2") return state.settings.person2;
+  if (owner === "unassigned") return "Unassigned";
   return "Joint";
 }
 function categoryById(id) { return state.categories.find((c) => c.id === id); }
@@ -105,7 +106,7 @@ function cardEl(t) {
     <div class="meta">
       ${cat ? `<span class="tag cat" style="background:${cat.color}">${escapeHtml(cat.name)}</span>` : ""}
       <span class="tag prio-${t.priority}">${t.priority}</span>
-      <span class="tag owner">${escapeHtml(ownerName(t.owner))}</span>
+      <span class="tag owner ${t.owner === "unassigned" ? "unassigned" : ""}">${escapeHtml(ownerName(t.owner))}</span>
       ${due}
     </div>`;
 
@@ -146,6 +147,7 @@ function fillCategorySelect(sel, selectedId) {
 }
 function fillOwnerSelect(sel, selected) {
   sel.innerHTML = `
+    <option value="unassigned">Unassigned</option>
     <option value="joint">Joint</option>
     <option value="p1">${escapeHtml(state.settings.person1)}</option>
     <option value="p2">${escapeHtml(state.settings.person2)}</option>`;
@@ -160,7 +162,7 @@ function openTaskDialog(task) {
   $("#task-notes").value = isEdit ? task.notes : "";
   fillCategorySelect($("#task-category"), isEdit ? task.category_id : "");
   $("#task-priority").value = isEdit ? task.priority : "medium";
-  fillOwnerSelect($("#task-owner"), isEdit ? task.owner : "joint");
+  fillOwnerSelect($("#task-owner"), isEdit ? task.owner : "unassigned");
   $("#task-status").value = isEdit ? task.status : "backlog";
   $("#task-due").value = isEdit && task.due_date ? task.due_date : "";
   $("#task-delete").hidden = !isEdit;

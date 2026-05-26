@@ -28,7 +28,7 @@ db.exec(`
     notes       TEXT NOT NULL DEFAULT '',
     category_id INTEGER REFERENCES categories(id) ON DELETE SET NULL,
     priority    TEXT NOT NULL DEFAULT 'medium',
-    owner       TEXT NOT NULL DEFAULT 'joint',
+    owner       TEXT NOT NULL DEFAULT 'unassigned',
     status      TEXT NOT NULL DEFAULT 'backlog',
     due_date    TEXT,
     position    INTEGER NOT NULL DEFAULT 0,

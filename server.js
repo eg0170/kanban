@@ -10,7 +10,7 @@ app.use(express.static(join(__dirname, "public")));
 
 const STATUSES = ["backlog", "todo", "in_progress", "done"];
 const PRIORITIES = ["low", "medium", "high"];
-const OWNERS = ["joint", "p1", "p2"];
+const OWNERS = ["unassigned", "joint", "p1", "p2"];
 
 // ---- Settings (person names) ----
 function getSettings() {
@@ -74,7 +74,7 @@ app.post("/api/tasks", (req, res) => {
   if (!title || !title.trim()) return res.status(400).json({ error: "title required" });
   const status = STATUSES.includes(req.body.status) ? req.body.status : "backlog";
   const priority = PRIORITIES.includes(req.body.priority) ? req.body.priority : "medium";
-  const owner = OWNERS.includes(req.body.owner) ? req.body.owner : "joint";
+  const owner = OWNERS.includes(req.body.owner) ? req.body.owner : "unassigned";
   const pos = db
     .prepare("SELECT COALESCE(MAX(position), -1) + 1 AS p FROM tasks WHERE status = ?")
     .get(status).p;

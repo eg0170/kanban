@@ -107,6 +107,7 @@ button.danger { background: #b91c1c; border-color: #b91c1c; color: #fff; }
 .tag.prio-medium { background: #78350f; color: #fde68a; border: none; }
 .tag.prio-low { background: #14532d; color: #bbf7d0; border: none; }
 .tag.owner { background: #1e3a8a; color: #bfdbfe; border: none; }
+.tag.owner.unassigned { background: transparent; color: var(--muted); border: 1px dashed var(--border); }
 .tag.due { background: transparent; }
 .tag.due.overdue { color: #fca5a5; border-color: #fca5a5; }
 
