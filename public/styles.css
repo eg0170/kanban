@@ -143,6 +143,7 @@ button.danger { background: #b91c1c; border-color: #b91c1c; color: #fff; }
   box-shadow: 0 6px 24px rgba(0, 0, 0, 0.4);
   z-index: 50;
 }
+#bulk-bar[hidden] { display: none; }
 #bulk-bar #bulk-count { font-size: 0.85rem; color: var(--muted); }
 
 dialog {
