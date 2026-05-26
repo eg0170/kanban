@@ -125,6 +125,66 @@ button.danger { background: #b91c1c; border-color: #b91c1c; color: #fff; }
 .tag.prio-medium { background: #78350f; color: #fde68a; border: none; }
 .tag.prio-low { background: #14532d; color: #bbf7d0; border: none; }
 .tag.owner { background: #1e3a8a; color: #fff; border: none; }
+.tag.unread { background: #dc2626; color: #fff; border: none; font-weight: 600; }
+
+/* Inbox button + its count badge */
+.badge {
+  display: inline-block;
+  margin-left: 0.35rem;
+  background: #dc2626;
+  color: #fff;
+  font-size: 0.7rem;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 0 6px;
+  min-width: 1.1em;
+  text-align: center;
+}
+.badge[hidden] { display: none; }
+button.whoami { margin-left: auto; color: var(--muted); }
+
+/* Chat inside the task dialog */
+#task-chat { margin-top: 1rem; border-top: 1px solid var(--border); padding-top: 0.75rem; }
+#task-chat h3 { margin: 0 0 0.5rem; font-size: 0.9rem; }
+#chat-messages {
+  max-height: 240px;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+  margin-bottom: 0.6rem;
+}
+.chat-empty { color: var(--muted); font-size: 0.85rem; text-align: center; }
+.msg { max-width: 80%; }
+.msg.mine { align-self: flex-end; text-align: right; }
+.msg.theirs { align-self: flex-start; }
+.msg-meta { font-size: 0.65rem; color: var(--muted); margin-bottom: 2px; }
+.msg-body {
+  display: inline-block;
+  padding: 0.4rem 0.6rem;
+  border-radius: 10px;
+  background: var(--panel-2);
+  border: 1px solid var(--border);
+  font-size: 0.85rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+  text-align: left;
+}
+.msg.mine .msg-body { background: var(--accent); border-color: var(--accent); color: #fff; }
+#chat-form { display: flex; gap: 0.5rem; }
+#chat-form input { flex: 1; }
+
+/* Who are you? choices */
+.whoami-choices { display: flex; gap: 0.75rem; margin-top: 1rem; }
+.whoami-choices button { flex: 1; padding: 0.9rem; font-size: 1rem; }
+
+/* Inbox list */
+#inbox-list { list-style: none; padding: 0; margin: 0; display: flex; flex-direction: column; gap: 0.5rem; max-height: 60vh; overflow-y: auto; }
+#inbox-list li { background: var(--panel-2); border: 1px solid var(--border); border-radius: 8px; padding: 0.6rem 0.7rem; cursor: pointer; }
+#inbox-list li:hover { border-color: var(--accent); }
+.inbox-row { display: flex; justify-content: space-between; align-items: center; gap: 0.5rem; }
+.inbox-title { font-size: 0.9rem; font-weight: 600; }
+.inbox-preview { font-size: 0.8rem; color: var(--muted); margin-top: 3px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .tag.due { background: transparent; }
 .tag.due.overdue { color: #fca5a5; border-color: #fca5a5; }
 

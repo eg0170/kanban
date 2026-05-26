@@ -166,5 +166,75 @@ app.delete("/api/tasks/:id", (req, res) => {
   res.json({ ok: true });
 });
 
+// ---------- Chat ----------
+const PEOPLE = ["p1", "p2"];
+
+function markRead(taskId, person, lastId) {
+  db.prepare(
+    `INSERT INTO reads (task_id, person, last_read_id) VALUES (?, ?, ?)
+     ON CONFLICT(task_id, person) DO UPDATE SET last_read_id = MAX(last_read_id, excluded.last_read_id)`
+  ).run(taskId, person, lastId);
+}
+
+app.get("/api/tasks/:id/messages", (req, res) => {
+  res.json(db.prepare("SELECT * FROM messages WHERE task_id = ? ORDER BY id").all(req.params.id));
+});
+
+app.post("/api/tasks/:id/messages", (req, res) => {
+  const exists = db.prepare("SELECT id FROM tasks WHERE id = ?").get(req.params.id);
+  if (!exists) return res.status(404).json({ error: "not found" });
+  const sender = PEOPLE.includes(req.body.sender) ? req.body.sender : null;
+  const body = (req.body.body || "").trim();
+  if (!sender) return res.status(400).json({ error: "sender required" });
+  if (!body) return res.status(400).json({ error: "body required" });
+  const info = db
+    .prepare("INSERT INTO messages (task_id, sender, body) VALUES (?, ?, ?)")
+    .run(req.params.id, sender, body);
+  // The sender has implicitly read up to their own message.
+  markRead(req.params.id, sender, info.lastInsertRowid);
+  res.json(db.prepare("SELECT * FROM messages WHERE id = ?").get(info.lastInsertRowid));
+});
+
+app.post("/api/tasks/:id/read", (req, res) => {
+  const person = PEOPLE.includes(req.body.person) ? req.body.person : null;
+  if (!person) return res.status(400).json({ error: "person required" });
+  const max = db.prepare("SELECT COALESCE(MAX(id), 0) AS m FROM messages WHERE task_id = ?").get(req.params.id).m;
+  markRead(req.params.id, person, max);
+  res.json({ ok: true, last_read_id: max });
+});
+
+// Unread summary for one person: per-task counts + latest-message preview.
+app.get("/api/unread/:me", (req, res) => {
+  const me = PEOPLE.includes(req.params.me) ? req.params.me : null;
+  if (!me) return res.status(400).json({ error: "me required" });
+  const rows = db
+    .prepare(
+      `SELECT m.task_id AS task_id, t.title AS title,
+         SUM(CASE WHEN m.sender != @me AND m.id > COALESCE(r.last_read_id, 0) THEN 1 ELSE 0 END) AS unread,
+         MAX(m.id) AS last_id
+       FROM messages m
+       JOIN tasks t ON t.id = m.task_id
+       LEFT JOIN reads r ON r.task_id = m.task_id AND r.person = @me
+       GROUP BY m.task_id
+       HAVING unread > 0`
+    )
+    .all({ me });
+  const getMsg = db.prepare("SELECT body, sender, created_at FROM messages WHERE id = ?");
+  const items = rows
+    .map((row) => {
+      const lm = getMsg.get(row.last_id);
+      return {
+        task_id: row.task_id,
+        title: row.title,
+        unread: row.unread,
+        last_body: lm.body,
+        last_sender: lm.sender,
+        last_at: lm.created_at,
+      };
+    })
+    .sort((a, b) => (a.last_at < b.last_at ? 1 : -1));
+  res.json({ total: items.reduce((s, i) => s + i.unread, 0), items });
+});
+
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => console.log(`Kanban running on http://localhost:${PORT}`));

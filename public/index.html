@@ -23,9 +23,11 @@
         <select id="filter-category"><option value="all">All</option></select>
       </label>
       <button id="btn-add" class="primary">+ New task</button>
+      <button id="btn-inbox">Inbox<span id="inbox-badge" class="badge" hidden>0</span></button>
       <button id="btn-archived">Show archived</button>
       <button id="btn-categories">Categories</button>
       <button id="btn-settings">Settings</button>
+      <button id="btn-whoami" class="whoami"></button>
     </div>
   </header>
 
@@ -74,6 +76,36 @@
         <button type="submit" class="primary">Save</button>
       </div>
     </form>
+
+    <section id="task-chat" hidden>
+      <h3>Chat</h3>
+      <div id="chat-messages"></div>
+      <form id="chat-form" autocomplete="off">
+        <input id="chat-input" placeholder="Message…" maxlength="2000" />
+        <button type="submit" class="primary">Send</button>
+      </form>
+    </section>
+  </dialog>
+
+  <!-- Who are you? dialog -->
+  <dialog id="whoami-dialog">
+    <h2>Who's this?</h2>
+    <p class="section-label">We'll remember you on this device so chat knows who's who.</p>
+    <div class="whoami-choices">
+      <button type="button" id="whoami-p1" class="primary"></button>
+      <button type="button" id="whoami-p2" class="primary"></button>
+    </div>
+  </dialog>
+
+  <!-- Unified unread inbox -->
+  <dialog id="inbox-dialog">
+    <h2>Unread messages</h2>
+    <ul id="inbox-list"></ul>
+    <p id="inbox-empty" hidden>You're all caught up. 🎉</p>
+    <div class="dialog-actions">
+      <span class="spacer"></span>
+      <button type="button" class="dialog-close">Close</button>
+    </div>
   </dialog>
 
   <!-- Bulk edit dialog -->

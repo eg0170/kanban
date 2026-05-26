@@ -44,6 +44,25 @@ if (!taskCols.includes("archived")) {
   db.exec("ALTER TABLE tasks ADD COLUMN archived INTEGER NOT NULL DEFAULT 0");
 }
 
+// Per-task chat between the two people, plus per-person read tracking.
+db.exec(`
+  CREATE TABLE IF NOT EXISTS messages (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    task_id    INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+    sender     TEXT NOT NULL,
+    body       TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_messages_task ON messages(task_id);
+
+  CREATE TABLE IF NOT EXISTS reads (
+    task_id      INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+    person       TEXT NOT NULL,
+    last_read_id INTEGER NOT NULL DEFAULT 0,
+    PRIMARY KEY (task_id, person)
+  );
+`);
+
 // Seed defaults on first run. Everything below is overridable via env vars so
 // no personal data needs to live in the repo — rename people in Settings and
 // edit categories in the Categories dialog at runtime.

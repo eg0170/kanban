@@ -19,6 +19,8 @@ const state = {
   filter: { owner: "all", category: "all" },
   showArchived: false,
   selected: new Set(),
+  me: null,
+  unread: { total: 0, map: {}, items: [] },
 };
 
 const $ = (sel) => document.querySelector(sel);
@@ -43,6 +45,20 @@ function ownerName(owner) {
 function categoryById(id) { return state.categories.find((c) => c.id === id); }
 function ownerColor(owner) { return state.settings["color_" + owner] || "#475569"; }
 
+// ---------- Identity (who am I, remembered in a cookie) ----------
+function getMe() {
+  const m = document.cookie.match(/(?:^|; )kanban_me=(p1|p2)/);
+  return m ? m[1] : null;
+}
+function setMe(p) {
+  // 400 days is the max a Chromium browser will persist a cookie.
+  document.cookie = `kanban_me=${p}; max-age=34560000; path=/; samesite=lax`;
+  state.me = p;
+}
+function meName() {
+  return state.me ? ownerName(state.me) : "—";
+}
+
 // ---------- Load ----------
 async function loadAll() {
   const [tasks, categories, settings] = await Promise.all([
@@ -56,10 +72,34 @@ async function loadAll() {
   // Drop selections for tasks that no longer exist.
   const ids = new Set(tasks.map((t) => t.id));
   [...state.selected].forEach((id) => { if (!ids.has(id)) state.selected.delete(id); });
+  await loadUnread();
   syncOwnerLabels();
   renderCategoryFilter();
   renderBoard();
   renderBulkBar();
+  renderIdentity();
+}
+
+async function loadUnread() {
+  if (!state.me) {
+    state.unread = { total: 0, map: {}, items: [] };
+  } else {
+    const data = await api.get(`/api/unread/${state.me}`);
+    const map = {};
+    data.items.forEach((i) => { map[i.task_id] = i.unread; });
+    state.unread = { total: data.total, map, items: data.items };
+  }
+  renderInboxButton();
+}
+
+function renderInboxButton() {
+  const badge = $("#inbox-badge");
+  badge.hidden = state.unread.total === 0;
+  badge.textContent = state.unread.total;
+}
+
+function renderIdentity() {
+  $("#btn-whoami").textContent = state.me ? `You: ${meName()}` : "Set who you are";
 }
 
 function syncOwnerLabels() {
@@ -228,6 +268,7 @@ function cardEl(t, isArchived = false) {
       <span class="tag prio-${t.priority}">${t.priority}</span>
       <span class="tag owner" style="background:${ownerColor(t.owner)}">${escapeHtml(ownerName(t.owner))}</span>
       ${due}
+      ${state.unread.map[t.id] ? `<span class="tag unread" title="Unread messages">💬 ${state.unread.map[t.id]}</span>` : ""}
       ${isArchived ? `<button class="restore" title="Restore to Done">Restore</button>` : ""}
     </div>`;
 
@@ -304,6 +345,7 @@ function openTaskDialog(task) {
   $("#task-status").value = isEdit ? task.status : "backlog";
   $("#task-due").value = isEdit && task.due_date ? task.due_date : "";
   $("#task-delete").hidden = !isEdit;
+  openChat(isEdit ? task.id : null);
   $("#task-dialog").showModal();
 }
 
@@ -321,8 +363,7 @@ $("#task-form").addEventListener("submit", async (e) => {
   };
   if (id) await api.send("PUT", `/api/tasks/${id}`, payload);
   else await api.send("POST", "/api/tasks", payload);
-  $("#task-dialog").close();
-  await loadAll();
+  $("#task-dialog").close(); // 'close' listener reloads the board.
 });
 
 $("#task-delete").addEventListener("click", async () => {
@@ -330,9 +371,95 @@ $("#task-delete").addEventListener("click", async () => {
   if (id && confirm("Delete this task?")) {
     await api.send("DELETE", `/api/tasks/${id}`);
     $("#task-dialog").close();
-    await loadAll();
   }
 });
+
+// Refresh the board (and unread badges) whenever the task dialog closes,
+// since opening a task's chat marks its messages read.
+$("#task-dialog").addEventListener("close", () => loadAll());
+
+// ---------- Per-task chat ----------
+async function openChat(taskId) {
+  const section = $("#task-chat");
+  if (!taskId) { section.hidden = true; return; }
+  section.hidden = false;
+  $("#chat-input").value = "";
+  await renderChat(taskId);
+  if (state.me) await api.send("POST", `/api/tasks/${taskId}/read`, { person: state.me });
+}
+
+async function renderChat(taskId) {
+  const box = $("#chat-messages");
+  const msgs = await api.get(`/api/tasks/${taskId}/messages`);
+  if (msgs.length === 0) {
+    box.innerHTML = `<p class="chat-empty">No messages yet.</p>`;
+  } else {
+    box.innerHTML = msgs
+      .map((m) => {
+        const mine = m.sender === state.me;
+        return `<div class="msg ${mine ? "mine" : "theirs"}">
+          <div class="msg-meta">${escapeHtml(ownerName(m.sender))} · ${fmtDateTime(m.created_at)}</div>
+          <div class="msg-body">${escapeHtml(m.body)}</div>
+        </div>`;
+      })
+      .join("");
+  }
+  box.scrollTop = box.scrollHeight;
+}
+
+$("#chat-form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const taskId = $("#task-id").value;
+  const body = $("#chat-input").value.trim();
+  if (!taskId || !body) return;
+  if (!state.me) { openWhoami(); return; }
+  await api.send("POST", `/api/tasks/${taskId}/messages`, { sender: state.me, body });
+  $("#chat-input").value = "";
+  await renderChat(taskId);
+});
+
+// ---------- Identity prompt ----------
+function openWhoami() {
+  $("#whoami-p1").textContent = state.settings.person1;
+  $("#whoami-p2").textContent = state.settings.person2;
+  $("#whoami-dialog").showModal();
+}
+async function chooseMe(p) {
+  setMe(p);
+  $("#whoami-dialog").close();
+  await loadAll();
+}
+$("#whoami-p1").addEventListener("click", () => chooseMe("p1"));
+$("#whoami-p2").addEventListener("click", () => chooseMe("p2"));
+$("#btn-whoami").addEventListener("click", openWhoami);
+
+// ---------- Unified unread inbox ----------
+function openInbox() {
+  const list = $("#inbox-list");
+  const items = state.unread.items;
+  $("#inbox-empty").hidden = items.length > 0;
+  list.innerHTML = items
+    .map(
+      (i) => `<li data-task="${i.task_id}">
+        <div class="inbox-row">
+          <span class="inbox-title">${escapeHtml(i.title)}</span>
+          <span class="tag unread">💬 ${i.unread}</span>
+        </div>
+        <div class="inbox-preview">${escapeHtml(ownerName(i.last_sender))}: ${escapeHtml(i.last_body)}</div>
+      </li>`
+    )
+    .join("");
+  list.querySelectorAll("li").forEach((li) =>
+    li.addEventListener("click", () => {
+      const id = Number(li.dataset.task);
+      $("#inbox-dialog").close();
+      const task = state.tasks.find((t) => t.id === id);
+      if (task) openTaskDialog(task);
+    })
+  );
+  $("#inbox-dialog").showModal();
+}
+$("#btn-inbox").addEventListener("click", openInbox);
 
 // ---------- Categories dialog ----------
 function renderCategoryFilter() {
@@ -428,5 +555,11 @@ function fmtDate(iso) {
   const d = new Date(iso + "T00:00:00");
   return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
 }
+function fmtDateTime(s) {
+  // SQLite stores UTC ("YYYY-MM-DD HH:MM:SS"); parse as UTC then show local.
+  const d = new Date(s.replace(" ", "T") + "Z");
+  return d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
+}
 
-loadAll();
+state.me = getMe();
+loadAll().then(() => { if (!state.me) openWhoami(); });
