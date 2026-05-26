@@ -171,6 +171,16 @@ button.whoami { margin-left: auto; color: var(--muted); }
   text-align: left;
 }
 .msg.mine .msg-body { background: var(--accent); border-color: var(--accent); color: #fff; }
+.msg-body a { color: inherit; text-decoration: underline; }
+.msg.theirs .msg-body a { color: #93c5fd; }
+.msg-actions { display: flex; gap: 0.4rem; justify-content: flex-end; margin-top: 2px; }
+.msg.theirs .msg-actions { justify-content: flex-start; }
+.msg-actions button { font-size: 0.65rem; padding: 1px 6px; background: transparent; color: var(--muted); border: none; }
+.msg-actions button:hover { color: var(--text); text-decoration: underline; }
+.msg-editor { margin-top: 4px; }
+.msg-editor textarea { width: 100%; box-sizing: border-box; }
+.msg-editor-actions { display: flex; gap: 0.4rem; margin-top: 4px; }
+.msg-editor-actions button { font-size: 0.7rem; padding: 0.2rem 0.5rem; }
 #chat-form { display: flex; gap: 0.5rem; }
 #chat-form input { flex: 1; }
 

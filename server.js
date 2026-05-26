@@ -195,6 +195,25 @@ app.post("/api/tasks/:id/messages", (req, res) => {
   res.json(db.prepare("SELECT * FROM messages WHERE id = ?").get(info.lastInsertRowid));
 });
 
+// Edit / delete a message — only the author (matching identity) may do so.
+app.put("/api/messages/:id", (req, res) => {
+  const m = db.prepare("SELECT * FROM messages WHERE id = ?").get(req.params.id);
+  if (!m) return res.status(404).json({ error: "not found" });
+  if (req.body.me !== m.sender) return res.status(403).json({ error: "not your message" });
+  const body = (req.body.body || "").trim();
+  if (!body) return res.status(400).json({ error: "body required" });
+  db.prepare("UPDATE messages SET body = ? WHERE id = ?").run(body, req.params.id);
+  res.json(db.prepare("SELECT * FROM messages WHERE id = ?").get(req.params.id));
+});
+
+app.delete("/api/messages/:id", (req, res) => {
+  const m = db.prepare("SELECT * FROM messages WHERE id = ?").get(req.params.id);
+  if (!m) return res.status(404).json({ error: "not found" });
+  if (req.body.me !== m.sender) return res.status(403).json({ error: "not your message" });
+  db.prepare("DELETE FROM messages WHERE id = ?").run(req.params.id);
+  res.json({ ok: true });
+});
+
 app.post("/api/tasks/:id/read", (req, res) => {
   const person = PEOPLE.includes(req.body.person) ? req.body.person : null;
   if (!person) return res.status(400).json({ error: "person required" });

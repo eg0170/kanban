@@ -397,15 +397,61 @@ async function renderChat(taskId) {
     box.innerHTML = msgs
       .map((m) => {
         const mine = m.sender === state.me;
-        return `<div class="msg ${mine ? "mine" : "theirs"}">
+        const actions = mine
+          ? `<div class="msg-actions">
+               <button type="button" class="msg-edit" data-id="${m.id}">Edit</button>
+               <button type="button" class="msg-del" data-id="${m.id}">Delete</button>
+             </div>`
+          : "";
+        return `<div class="msg ${mine ? "mine" : "theirs"}" data-id="${m.id}" data-body="${escapeHtml(m.body)}">
           <div class="msg-meta">${escapeHtml(ownerName(m.sender))} · ${fmtDateTime(m.created_at)}</div>
-          <div class="msg-body">${escapeHtml(m.body)}</div>
+          <div class="msg-body">${linkify(m.body)}</div>
+          ${actions}
         </div>`;
       })
       .join("");
   }
   box.scrollTop = box.scrollHeight;
 }
+
+// Inline edit / delete on your own messages (event-delegated).
+$("#chat-messages").addEventListener("click", async (e) => {
+  const taskId = $("#task-id").value;
+  const editBtn = e.target.closest(".msg-edit");
+  const delBtn = e.target.closest(".msg-del");
+  if (delBtn) {
+    if (confirm("Delete this message?")) {
+      await api.send("DELETE", `/api/messages/${delBtn.dataset.id}`, { me: state.me });
+      await renderChat(taskId);
+    }
+    return;
+  }
+  if (editBtn) {
+    const msg = editBtn.closest(".msg");
+    if (msg.querySelector(".msg-editor")) return; // already editing
+    const current = msg.dataset.body;
+    const bodyEl = msg.querySelector(".msg-body");
+    const editor = document.createElement("div");
+    editor.className = "msg-editor";
+    editor.innerHTML = `<textarea class="msg-edit-input" rows="2"></textarea>
+      <div class="msg-editor-actions">
+        <button type="button" class="msg-edit-save primary">Save</button>
+        <button type="button" class="msg-edit-cancel">Cancel</button>
+      </div>`;
+    editor.querySelector("textarea").value = current;
+    bodyEl.after(editor);
+    bodyEl.style.display = "none";
+    const ta = editor.querySelector("textarea");
+    ta.focus();
+    editor.querySelector(".msg-edit-cancel").addEventListener("click", () => { editor.remove(); bodyEl.style.display = ""; });
+    editor.querySelector(".msg-edit-save").addEventListener("click", async () => {
+      const body = ta.value.trim();
+      if (!body) return;
+      await api.send("PUT", `/api/messages/${editBtn.dataset.id}`, { me: state.me, body });
+      await renderChat(taskId);
+    });
+  }
+});
 
 $("#chat-form").addEventListener("submit", async (e) => {
   e.preventDefault();
@@ -434,7 +480,7 @@ $("#whoami-p2").addEventListener("click", () => chooseMe("p2"));
 $("#btn-whoami").addEventListener("click", openWhoami);
 
 // ---------- Unified unread inbox ----------
-function openInbox() {
+function renderInbox() {
   const list = $("#inbox-list");
   const items = state.unread.items;
   $("#inbox-empty").hidden = items.length > 0;
@@ -457,9 +503,60 @@ function openInbox() {
       if (task) openTaskDialog(task);
     })
   );
+}
+function openInbox() {
+  renderInbox();
   $("#inbox-dialog").showModal();
 }
 $("#btn-inbox").addEventListener("click", openInbox);
+
+// ---------- Lightweight polling for live unread badges ----------
+// Patch each card's unread badge in place (no full board re-render).
+function patchUnreadBadges() {
+  document.querySelectorAll(".card").forEach((card) => {
+    const meta = card.querySelector(".meta");
+    if (!meta) return;
+    const id = Number(card.dataset.id);
+    const existing = meta.querySelector(".tag.unread");
+    if (existing) existing.remove();
+    const n = state.unread.map[id] || 0;
+    if (n > 0) {
+      const span = document.createElement("span");
+      span.className = "tag unread";
+      span.title = "Unread messages";
+      span.textContent = `💬 ${n}`;
+      const restore = meta.querySelector(".restore");
+      if (restore) meta.insertBefore(span, restore);
+      else meta.appendChild(span);
+    }
+  });
+}
+
+async function pollUnread() {
+  if (!state.me) return;
+  await loadUnread(); // refreshes state.unread + inbox button
+  patchUnreadBadges();
+  if ($("#inbox-dialog").open) renderInbox();
+  // If a task's chat is open, refresh it only when new/removed messages exist
+  // (avoids scroll jank) and never while you're mid-edit.
+  const dlg = $("#task-dialog");
+  if (dlg.open) {
+    const id = $("#task-id").value;
+    const editing = $("#chat-messages").querySelector(".msg-editor");
+    if (id && !editing) {
+      const msgs = await api.get(`/api/tasks/${id}/messages`);
+      const shown = $("#chat-messages").querySelectorAll(".msg").length;
+      if (msgs.length !== shown) {
+        await renderChat(id);
+        await api.send("POST", `/api/tasks/${id}/read`, { person: state.me });
+      }
+    }
+  }
+}
+
+setInterval(() => {
+  if (document.visibilityState === "visible") pollUnread();
+}, 15000);
 
 // ---------- Categories dialog ----------
 function renderCategoryFilter() {
@@ -550,6 +647,22 @@ document.querySelectorAll(".dialog-close").forEach((b) =>
 function escapeHtml(s) {
   return String(s).replace(/[&<>"']/g, (c) =>
     ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+}
+// Escape everything, then turn http(s) URLs into new-tab links. Safe because
+// only http/https-scheme matches are wrapped, and both text and href are escaped.
+function linkify(text) {
+  const urlRe = /(https?:\/\/[^\s<]+)/g;
+  let out = "";
+  let last = 0;
+  let m;
+  while ((m = urlRe.exec(text))) {
+    out += escapeHtml(text.slice(last, m.index));
+    const url = m[0];
+    out += `<a href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer">${escapeHtml(url)}</a>`;
+    last = m.index + url.length;
+  }
+  out += escapeHtml(text.slice(last));
+  return out;
 }
 function fmtDate(iso) {
   const d = new Date(iso + "T00:00:00");
