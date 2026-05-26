@@ -32,10 +32,17 @@ db.exec(`
     status      TEXT NOT NULL DEFAULT 'backlog',
     due_date    TEXT,
     position    INTEGER NOT NULL DEFAULT 0,
+    archived    INTEGER NOT NULL DEFAULT 0,
     created_at  TEXT NOT NULL DEFAULT (datetime('now')),
     updated_at  TEXT NOT NULL DEFAULT (datetime('now'))
   );
 `);
+
+// Migration: add `archived` to tasks tables created before this column existed.
+const taskCols = db.prepare("PRAGMA table_info(tasks)").all().map((c) => c.name);
+if (!taskCols.includes("archived")) {
+  db.exec("ALTER TABLE tasks ADD COLUMN archived INTEGER NOT NULL DEFAULT 0");
+}
 
 // Seed defaults on first run. Everything below is overridable via env vars so
 // no personal data needs to live in the repo — rename people in Settings and

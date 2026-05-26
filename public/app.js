@@ -17,6 +17,7 @@ const state = {
     color_p2: "#9d174d",
   },
   filter: { owner: "all", category: "all" },
+  showArchived: false,
 };
 
 const $ = (sel) => document.querySelector(sel);
@@ -73,16 +74,25 @@ function visibleTasks() {
 function renderBoard() {
   const board = $("#board");
   board.innerHTML = "";
+  board.classList.toggle("with-archived", state.showArchived);
   const tasks = visibleTasks();
+  const active = tasks.filter((t) => !t.archived);
+
   for (const col of COLUMNS) {
-    const colTasks = tasks
+    const colTasks = active
       .filter((t) => t.status === col.status)
       .sort((a, b) => a.position - b.position);
+
+    const clearBtn =
+      col.status === "done"
+        ? `<button class="col-action" id="clear-done" title="Archive all done tasks">Clear</button>`
+        : "";
 
     const el = document.createElement("section");
     el.className = "column";
     el.innerHTML = `
-      <div class="column-head"><span>${col.title}</span><span class="count">${colTasks.length}</span></div>
+      <div class="column-head"><span>${col.title}</span>
+        <span class="head-right"><span class="count">${colTasks.length}</span>${clearBtn}</span></div>
       <div class="column-body" data-status="${col.status}"></div>`;
     const body = el.querySelector(".column-body");
 
@@ -93,13 +103,38 @@ function renderBoard() {
     colTasks.forEach((t) => body.appendChild(cardEl(t)));
     board.appendChild(el);
   }
+
+  if (state.showArchived) {
+    const archived = tasks
+      .filter((t) => t.archived)
+      .sort((a, b) => (a.updated_at < b.updated_at ? 1 : -1));
+    const el = document.createElement("section");
+    el.className = "column archived-column";
+    el.innerHTML = `
+      <div class="column-head"><span>Archived</span><span class="count">${archived.length}</span></div>
+      <div class="column-body"></div>`;
+    const body = el.querySelector(".column-body");
+    archived.forEach((t) => body.appendChild(cardEl(t, true)));
+    board.appendChild(el);
+  }
+
+  const cd = $("#clear-done");
+  if (cd) cd.addEventListener("click", clearDone);
 }
 
-function cardEl(t) {
+async function clearDone() {
+  const n = state.tasks.filter((t) => t.status === "done" && !t.archived).length;
+  if (!n) return;
+  if (!confirm(`Archive ${n} done task${n === 1 ? "" : "s"}? You can see them again with "Show archived".`)) return;
+  await api.send("POST", "/api/tasks/clear-done");
+  await loadAll();
+}
+
+function cardEl(t, isArchived = false) {
   const cat = categoryById(t.category_id);
   const card = document.createElement("div");
-  card.className = "card";
-  card.draggable = true;
+  card.className = "card" + (isArchived ? " archived" : "");
+  if (!isArchived) card.draggable = true;
   card.dataset.id = t.id;
   if (cat) card.style.setProperty("--cat-color", cat.color);
 
@@ -116,14 +151,27 @@ function cardEl(t) {
       <span class="tag prio-${t.priority}">${t.priority}</span>
       <span class="tag owner" style="background:${ownerColor(t.owner)}">${escapeHtml(ownerName(t.owner))}</span>
       ${due}
+      ${isArchived ? `<button class="restore" title="Restore to Done">Restore</button>` : ""}
     </div>`;
 
-  card.addEventListener("click", () => openTaskDialog(t));
-  card.addEventListener("dragstart", (e) => {
-    card.classList.add("dragging");
-    e.dataTransfer.setData("text/plain", String(t.id));
+  card.addEventListener("click", (e) => {
+    if (e.target.closest(".restore")) return;
+    openTaskDialog(t);
   });
-  card.addEventListener("dragend", () => card.classList.remove("dragging"));
+
+  if (isArchived) {
+    card.querySelector(".restore").addEventListener("click", async (e) => {
+      e.stopPropagation();
+      await api.send("POST", `/api/tasks/${t.id}/restore`);
+      await loadAll();
+    });
+  } else {
+    card.addEventListener("dragstart", (e) => {
+      card.classList.add("dragging");
+      e.dataTransfer.setData("text/plain", String(t.id));
+    });
+    card.addEventListener("dragend", () => card.classList.remove("dragging"));
+  }
   return card;
 }
 
@@ -266,6 +314,11 @@ $("#settings-form").addEventListener("submit", async (e) => {
 
 // ---------- Wiring ----------
 $("#btn-add").addEventListener("click", () => openTaskDialog(null));
+$("#btn-archived").addEventListener("click", () => {
+  state.showArchived = !state.showArchived;
+  $("#btn-archived").textContent = state.showArchived ? "Hide archived" : "Show archived";
+  renderBoard();
+});
 $("#btn-categories").addEventListener("click", () => { renderCategoryList(); $("#cat-dialog").showModal(); });
 $("#btn-settings").addEventListener("click", () => {
   $("#set-p1").value = state.settings.person1;

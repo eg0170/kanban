@@ -135,6 +135,20 @@ app.post("/api/tasks/reorder", (req, res) => {
   res.json({ ok: true });
 });
 
+// Archive every done task (the "Clear Done" button).
+app.post("/api/tasks/clear-done", (_req, res) => {
+  const info = db
+    .prepare("UPDATE tasks SET archived = 1, updated_at = datetime('now') WHERE status = 'done' AND archived = 0")
+    .run();
+  res.json({ ok: true, archived: info.changes });
+});
+
+// Bring an archived task back (stays in Done).
+app.post("/api/tasks/:id/restore", (req, res) => {
+  db.prepare("UPDATE tasks SET archived = 0, updated_at = datetime('now') WHERE id = ?").run(req.params.id);
+  res.json({ ok: true });
+});
+
 app.delete("/api/tasks/:id", (req, res) => {
   db.prepare("DELETE FROM tasks WHERE id = ?").run(req.params.id);
   res.json({ ok: true });
