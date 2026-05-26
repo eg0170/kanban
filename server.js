@@ -29,6 +29,10 @@ app.put("/api/settings", (req, res) => {
       stmt.run(key, req.body[key].trim());
     }
   }
+  for (const key of ["color_unassigned", "color_joint", "color_p1", "color_p2"]) {
+    const v = req.body[key];
+    if (typeof v === "string" && /^#[0-9a-fA-F]{6}$/.test(v)) stmt.run(key, v);
+  }
   res.json(getSettings());
 });
 

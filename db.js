@@ -52,11 +52,17 @@ if (catCount === 0) {
   defaultCategories.forEach((name, i) => seed.run(name, PALETTE[i % PALETTE.length], i));
 }
 
-const settingCount = db.prepare("SELECT COUNT(*) AS n FROM settings").get().n;
-if (settingCount === 0) {
-  const s = db.prepare("INSERT INTO settings (key, value) VALUES (?, ?)");
-  s.run("person1", process.env.DEFAULT_PERSON1 || "Person 1");
-  s.run("person2", process.env.DEFAULT_PERSON2 || "Person 2");
-}
+// Insert-or-ignore so existing installs pick up newly added defaults on
+// upgrade without overwriting values the user has already set.
+const defaultSettings = {
+  person1: process.env.DEFAULT_PERSON1 || "Person 1",
+  person2: process.env.DEFAULT_PERSON2 || "Person 2",
+  color_unassigned: "#475569",
+  color_joint: "#1e3a8a",
+  color_p1: "#0e7490",
+  color_p2: "#9d174d",
+};
+const insertSetting = db.prepare("INSERT OR IGNORE INTO settings (key, value) VALUES (?, ?)");
+for (const [k, v] of Object.entries(defaultSettings)) insertSetting.run(k, v);
 
 export default db;

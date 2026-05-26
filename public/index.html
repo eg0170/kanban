@@ -87,8 +87,20 @@
   <dialog id="settings-dialog">
     <form id="settings-form">
       <h2>Settings</h2>
-      <label>Person 1 name<input id="set-p1" maxlength="40" /></label>
-      <label>Person 2 name<input id="set-p2" maxlength="40" /></label>
+      <p class="section-label">People</p>
+      <div class="row">
+        <label>Person 1 name<input id="set-p1" maxlength="40" /></label>
+        <label class="color-field">Color<input type="color" id="set-color-p1" /></label>
+      </div>
+      <div class="row">
+        <label>Person 2 name<input id="set-p2" maxlength="40" /></label>
+        <label class="color-field">Color<input type="color" id="set-color-p2" /></label>
+      </div>
+      <p class="section-label">Tag colors</p>
+      <div class="row">
+        <label class="color-field">Joint<input type="color" id="set-color-joint" /></label>
+        <label class="color-field">Unassigned<input type="color" id="set-color-unassigned" /></label>
+      </div>
       <div class="dialog-actions">
         <span class="spacer"></span>
         <button type="button" class="dialog-close">Cancel</button>

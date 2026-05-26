@@ -8,7 +8,14 @@ const COLUMNS = [
 const state = {
   tasks: [],
   categories: [],
-  settings: { person1: "Person 1", person2: "Person 2" },
+  settings: {
+    person1: "Person 1",
+    person2: "Person 2",
+    color_unassigned: "#475569",
+    color_joint: "#1e3a8a",
+    color_p1: "#0e7490",
+    color_p2: "#9d174d",
+  },
   filter: { owner: "all", category: "all" },
 };
 
@@ -32,6 +39,7 @@ function ownerName(owner) {
   return "Joint";
 }
 function categoryById(id) { return state.categories.find((c) => c.id === id); }
+function ownerColor(owner) { return state.settings["color_" + owner] || "#475569"; }
 
 // ---------- Load ----------
 async function loadAll() {
@@ -106,7 +114,7 @@ function cardEl(t) {
     <div class="meta">
       ${cat ? `<span class="tag cat" style="background:${cat.color}">${escapeHtml(cat.name)}</span>` : ""}
       <span class="tag prio-${t.priority}">${t.priority}</span>
-      <span class="tag owner ${t.owner === "unassigned" ? "unassigned" : ""}">${escapeHtml(ownerName(t.owner))}</span>
+      <span class="tag owner" style="background:${ownerColor(t.owner)}">${escapeHtml(ownerName(t.owner))}</span>
       ${due}
     </div>`;
 
@@ -244,7 +252,14 @@ $("#cat-add-form").addEventListener("submit", async (e) => {
 // ---------- Settings dialog ----------
 $("#settings-form").addEventListener("submit", async (e) => {
   e.preventDefault();
-  await api.send("PUT", "/api/settings", { person1: $("#set-p1").value, person2: $("#set-p2").value });
+  await api.send("PUT", "/api/settings", {
+    person1: $("#set-p1").value,
+    person2: $("#set-p2").value,
+    color_p1: $("#set-color-p1").value,
+    color_p2: $("#set-color-p2").value,
+    color_joint: $("#set-color-joint").value,
+    color_unassigned: $("#set-color-unassigned").value,
+  });
   $("#settings-dialog").close();
   await loadAll();
 });
@@ -255,6 +270,10 @@ $("#btn-categories").addEventListener("click", () => { renderCategoryList(); $("
 $("#btn-settings").addEventListener("click", () => {
   $("#set-p1").value = state.settings.person1;
   $("#set-p2").value = state.settings.person2;
+  $("#set-color-p1").value = state.settings.color_p1;
+  $("#set-color-p2").value = state.settings.color_p2;
+  $("#set-color-joint").value = state.settings.color_joint;
+  $("#set-color-unassigned").value = state.settings.color_unassigned;
   $("#settings-dialog").showModal();
 });
 $("#filter-owner").addEventListener("change", (e) => { state.filter.owner = e.target.value; renderBoard(); });

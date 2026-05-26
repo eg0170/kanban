@@ -29,10 +29,15 @@ services:
     restart: unless-stopped
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-    command: --label-enable --cleanup --interval 300
+    command: --label-enable --cleanup --interval 60
     # --label-enable  : only update containers that opt in via the label above
     # --cleanup       : remove the old image after a successful update
-    # --interval 300  : check GHCR for a new image every 5 minutes
+    # --interval 60   : check GHCR for a new image every 60 seconds. Checks are
+    #                   cheap (a registry digest comparison), so polling often
+    #                   is fine. For *instant* updates instead of polling, drop
+    #                   --interval and add --http-api-update, then have the
+    #                   GitHub Action POST to Watchtower's /v1/update endpoint
+    #                   after publishing the image.
 
 volumes:
   kanban-data:

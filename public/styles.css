@@ -106,8 +106,7 @@ button.danger { background: #b91c1c; border-color: #b91c1c; color: #fff; }
 .tag.prio-high { background: #7f1d1d; color: #fecaca; border: none; }
 .tag.prio-medium { background: #78350f; color: #fde68a; border: none; }
 .tag.prio-low { background: #14532d; color: #bbf7d0; border: none; }
-.tag.owner { background: #1e3a8a; color: #bfdbfe; border: none; }
-.tag.owner.unassigned { background: transparent; color: var(--muted); border: 1px dashed var(--border); }
+.tag.owner { background: #1e3a8a; color: #fff; border: none; }
 .tag.due { background: transparent; }
 .tag.due.overdue { color: #fca5a5; border-color: #fca5a5; }
 
@@ -127,6 +126,9 @@ dialog .row { display: flex; gap: 0.75rem; }
 dialog .row label { flex: 1; }
 .dialog-actions { display: flex; align-items: center; gap: 0.5rem; margin-top: 0.5rem; }
 .dialog-actions .spacer { flex: 1; }
+.section-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin: 0.5rem 0 0; }
+.color-field { flex: 0 0 auto; }
+.color-field input[type=color] { width: 48px; height: 34px; padding: 2px; }
 
 #cat-list { list-style: none; padding: 0; margin: 0 0 1rem; display: flex; flex-direction: column; gap: 0.5rem; }
 #cat-list li { display: flex; align-items: center; gap: 0.5rem; }
