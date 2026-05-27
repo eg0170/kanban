@@ -47,12 +47,12 @@ services:
 
 volumes:
   kanban-data:
-  # Backups land on the NAS over NFS. Set NAS_HOST and NAS_BACKUP_EXPORT in a
-  # .env file next to this compose (see .env.example). The NAS export must
-  # allow this server's IP read/write.
+  # Backups land on the NAS over NFS. Edit the two values below to match your
+  # NAS: 'addr' is the NAS IP/hostname, 'device' is the NFS export path (keep
+  # the leading colon). The export must allow this server's IP read/write.
   kanban-backups:
     driver: local
     driver_opts:
       type: nfs
-      o: "addr=${NAS_HOST},nfsvers=4,rw"
-      device: ":${NAS_BACKUP_EXPORT}"
+      o: "addr=10.0.0.10,nfsvers=4,rw"
+      device: ":/volume1/backups/kanban"
