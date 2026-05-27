@@ -132,19 +132,49 @@ app.put("/api/tasks/:id", (req, res) => {
     b.due_date === undefined ? t.due_date : b.due_date || null,
     req.params.id
   );
+  // Notify the other person when this lands in Done.
+  if (status === "done" && t.status !== "done" && PEOPLE.includes(b.actor)) {
+    announceDone(req.params.id, b.actor);
+  }
   res.json(db.prepare("SELECT * FROM tasks WHERE id = ?").get(req.params.id));
 });
 
-// Reorder / move: accepts { status, orderedIds: [...] } for a single column.
+// Reorder / move: accepts { status, orderedIds: [...], actor } for a column.
 app.post("/api/tasks/reorder", (req, res) => {
   const { status, orderedIds } = req.body;
   if (!STATUSES.includes(status) || !Array.isArray(orderedIds))
     return res.status(400).json({ error: "status and orderedIds required" });
+  const actor = PEOPLE.includes(req.body.actor) ? req.body.actor : null;
+
+  // Snapshot prior status/owner so we can detect transitions.
+  const rows = orderedIds.length
+    ? db.prepare(`SELECT id, status, owner FROM tasks WHERE id IN (${orderedIds.map(() => "?").join(",")})`).all(...orderedIds)
+    : [];
+  const prevById = {};
+  rows.forEach((r) => { prevById[r.id] = r; });
+
+  const moveOwned = db.prepare("UPDATE tasks SET status = ?, position = ?, owner = ? WHERE id = ?");
   const move = db.prepare("UPDATE tasks SET status = ?, position = ? WHERE id = ?");
   const tx = db.transaction((ids) => {
-    ids.forEach((id, i) => move.run(status, i, id));
+    ids.forEach((id, i) => {
+      const prev = prevById[id];
+      // Pulling an unassigned task out of Backlog claims it for the mover.
+      if (actor && status !== "backlog" && prev && prev.owner === "unassigned") {
+        moveOwned.run(status, i, actor, id);
+      } else {
+        move.run(status, i, id);
+      }
+    });
   });
   tx(orderedIds);
+
+  // Notify the other person for each task that newly lands in Done.
+  if (status === "done" && actor) {
+    orderedIds.forEach((id) => {
+      const prev = prevById[id];
+      if (prev && prev.status !== "done") announceDone(id, actor);
+    });
+  }
   res.json({ ok: true });
 });
 
@@ -175,6 +205,16 @@ function markRead(taskId, person, lastId) {
     `INSERT INTO reads (task_id, person, last_read_id) VALUES (?, ?, ?)
      ON CONFLICT(task_id, person) DO UPDATE SET last_read_id = MAX(last_read_id, excluded.last_read_id)`
   ).run(taskId, person, lastId);
+}
+
+// Post a system-style chat note from `actor` so the OTHER person sees it as
+// unread (mutual-appreciation ping when a task is completed).
+const DONE_NOTE = "✅ Moved this to Done";
+function announceDone(taskId, actor) {
+  const info = db
+    .prepare("INSERT INTO messages (task_id, sender, body) VALUES (?, ?, ?)")
+    .run(taskId, actor, DONE_NOTE);
+  markRead(taskId, actor, info.lastInsertRowid); // actor has "read" their own note
 }
 
 app.get("/api/tasks/:id/messages", (req, res) => {

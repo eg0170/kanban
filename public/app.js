@@ -281,6 +281,7 @@ $("#bulk-form").addEventListener("submit", async (e) => {
     $("#bulk-dialog").close();
     return;
   }
+  payload.actor = state.me;
   await Promise.all([...state.selected].map((id) => api.send("PUT", `/api/tasks/${id}`, payload)));
   state.selected.clear();
   $("#bulk-dialog").close();
@@ -356,7 +357,7 @@ async function onDrop(e, status, body) {
   // Optimistic local update.
   const task = state.tasks.find((t) => t.id === id);
   if (task) task.status = status;
-  await api.send("POST", "/api/tasks/reorder", { status, orderedIds });
+  await api.send("POST", "/api/tasks/reorder", { status, orderedIds, actor: state.me });
   await loadAll();
 }
 
@@ -410,6 +411,7 @@ $("#task-form").addEventListener("submit", async (e) => {
     owner: $("#task-owner").value,
     status: $("#task-status").value,
     due_date: $("#task-due").value || null,
+    actor: state.me,
   };
   if (id) await api.send("PUT", `/api/tasks/${id}`, payload);
   else await api.send("POST", "/api/tasks", payload);
