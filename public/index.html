@@ -43,48 +43,55 @@
   <!-- Task dialog -->
   <dialog id="task-dialog">
     <button type="button" class="dialog-x dialog-close" aria-label="Close">&times;</button>
-    <form method="dialog" id="task-form">
-      <h2 id="task-dialog-title">New task</h2>
-      <input type="hidden" id="task-id" />
-      <label>Title<input id="task-title" required maxlength="200" /></label>
-      <label>Notes<textarea id="task-notes" rows="3"></textarea></label>
-      <div class="row">
-        <label>Category<select id="task-category"></select></label>
-        <label>Priority
-          <select id="task-priority">
-            <option value="low">Low</option>
-            <option value="medium" selected>Medium</option>
-            <option value="high">High</option>
-          </select>
-        </label>
-      </div>
-      <div class="row">
-        <label>Owner<select id="task-owner"></select></label>
-        <label>Status
-          <select id="task-status">
-            <option value="backlog">Backlog</option>
-            <option value="todo">To Do</option>
-            <option value="in_progress">In Progress</option>
-            <option value="done">Done</option>
-          </select>
-        </label>
-        <label>Due date<input type="date" id="task-due" /></label>
-      </div>
-      <div class="dialog-actions">
-        <button type="button" id="task-delete" class="danger" hidden>Delete</button>
-        <span class="spacer"></span>
-        <button type="submit" class="primary">Save</button>
-      </div>
-    </form>
+    <h2 id="task-dialog-title">New task</h2>
 
-    <section id="task-chat" hidden>
-      <h3>Chat</h3>
+    <div class="tabs" id="task-tabs" hidden>
+      <button type="button" class="tab is-active" data-tab="details">Details</button>
+      <button type="button" class="tab" data-tab="chat">Chat<span id="tab-chat-badge" class="badge" hidden>0</span></button>
+    </div>
+
+    <div class="tab-panel" id="panel-details">
+      <form method="dialog" id="task-form">
+        <input type="hidden" id="task-id" />
+        <label>Title<input id="task-title" required maxlength="200" /></label>
+        <label>Notes<textarea id="task-notes" rows="3"></textarea></label>
+        <div class="row">
+          <label>Category<select id="task-category"></select></label>
+          <label>Priority
+            <select id="task-priority">
+              <option value="low">Low</option>
+              <option value="medium" selected>Medium</option>
+              <option value="high">High</option>
+            </select>
+          </label>
+        </div>
+        <div class="row">
+          <label>Owner<select id="task-owner"></select></label>
+          <label>Status
+            <select id="task-status">
+              <option value="backlog">Backlog</option>
+              <option value="todo">To Do</option>
+              <option value="in_progress">In Progress</option>
+              <option value="done">Done</option>
+            </select>
+          </label>
+          <label>Due date<input type="date" id="task-due" /></label>
+        </div>
+        <div class="dialog-actions">
+          <button type="button" id="task-delete" class="danger" hidden>Delete</button>
+          <span class="spacer"></span>
+          <button type="submit" class="primary">Save</button>
+        </div>
+      </form>
+    </div>
+
+    <div class="tab-panel" id="panel-chat" hidden>
       <div id="chat-messages"></div>
       <form id="chat-form" autocomplete="off">
         <input id="chat-input" placeholder="Message…" maxlength="2000" />
         <button type="submit" class="primary">Send</button>
       </form>
-    </section>
+    </div>
   </dialog>
 
   <!-- Who are you? dialog -->

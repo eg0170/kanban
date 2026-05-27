@@ -21,6 +21,7 @@ const state = {
   selected: new Set(),
   me: null,
   unread: { total: 0, map: {}, items: [] },
+  activeTab: "details",
 };
 
 const $ = (sel) => document.querySelector(sel);
@@ -333,7 +334,7 @@ function fillOwnerSelect(sel, selected) {
   if (selected) sel.value = selected;
 }
 
-function openTaskDialog(task) {
+function openTaskDialog(task, initialTab = "details") {
   const isEdit = !!task;
   $("#task-dialog-title").textContent = isEdit ? "Edit task" : "New task";
   $("#task-id").value = isEdit ? task.id : "";
@@ -345,7 +346,15 @@ function openTaskDialog(task) {
   $("#task-status").value = isEdit ? task.status : "backlog";
   $("#task-due").value = isEdit && task.due_date ? task.due_date : "";
   $("#task-delete").hidden = !isEdit;
-  openChat(isEdit ? task.id : null);
+
+  // Tabs only make sense for an existing task (chat needs a saved task).
+  $("#task-tabs").hidden = !isEdit;
+  const unread = isEdit ? state.unread.map[task.id] || 0 : 0;
+  const tabBadge = $("#tab-chat-badge");
+  tabBadge.hidden = unread === 0;
+  tabBadge.textContent = unread;
+  setTab(isEdit ? initialTab : "details");
+
   $("#task-dialog").showModal();
 }
 
@@ -378,14 +387,31 @@ $("#task-delete").addEventListener("click", async () => {
 // since opening a task's chat marks its messages read.
 $("#task-dialog").addEventListener("close", () => loadAll());
 
+// ---------- Task dialog tabs (Details / Chat) ----------
+function setTab(name) {
+  state.activeTab = name;
+  document.querySelectorAll("#task-tabs .tab").forEach((b) =>
+    b.classList.toggle("is-active", b.dataset.tab === name)
+  );
+  $("#panel-details").hidden = name !== "details";
+  $("#panel-chat").hidden = name !== "chat";
+  if (name === "chat") enterChat();
+}
+
+$("#task-tabs").addEventListener("click", (e) => {
+  const tab = e.target.closest(".tab");
+  if (tab) setTab(tab.dataset.tab);
+});
+
 // ---------- Per-task chat ----------
-async function openChat(taskId) {
-  const section = $("#task-chat");
-  if (!taskId) { section.hidden = true; return; }
-  section.hidden = false;
+async function enterChat() {
+  const taskId = $("#task-id").value;
+  if (!taskId) return;
   $("#chat-input").value = "";
   await renderChat(taskId);
+  // Viewing the chat marks it read and clears the tab badge.
   if (state.me) await api.send("POST", `/api/tasks/${taskId}/read`, { person: state.me });
+  $("#tab-chat-badge").hidden = true;
 }
 
 async function renderChat(taskId) {
@@ -500,7 +526,7 @@ function renderInbox() {
       const id = Number(li.dataset.task);
       $("#inbox-dialog").close();
       const task = state.tasks.find((t) => t.id === id);
-      if (task) openTaskDialog(task);
+      if (task) openTaskDialog(task, "chat");
     })
   );
 }
@@ -537,13 +563,17 @@ async function pollUnread() {
   await loadUnread(); // refreshes state.unread + inbox button
   patchUnreadBadges();
   if ($("#inbox-dialog").open) renderInbox();
-  // If a task's chat is open, refresh it only when new/removed messages exist
-  // (avoids scroll jank) and never while you're mid-edit.
+
   const dlg = $("#task-dialog");
-  if (dlg.open) {
-    const id = $("#task-id").value;
+  if (!dlg.open) return;
+  const id = $("#task-id").value;
+  if (!id) return;
+
+  if (state.activeTab === "chat") {
+    // Refresh the open chat only when messages were added/removed (avoids
+    // scroll jank) and never while you're mid-edit.
     const editing = $("#chat-messages").querySelector(".msg-editor");
-    if (id && !editing) {
+    if (!editing) {
       const msgs = await api.get(`/api/tasks/${id}/messages`);
       const shown = $("#chat-messages").querySelectorAll(".msg").length;
       if (msgs.length !== shown) {
@@ -551,6 +581,13 @@ async function pollUnread() {
         await api.send("POST", `/api/tasks/${id}/read`, { person: state.me });
       }
     }
+    $("#tab-chat-badge").hidden = true;
+  } else {
+    // On the Details tab, surface newly arrived messages on the Chat tab badge.
+    const n = state.unread.map[Number(id)] || 0;
+    const badge = $("#tab-chat-badge");
+    badge.hidden = n === 0;
+    badge.textContent = n;
   }
 }
 
