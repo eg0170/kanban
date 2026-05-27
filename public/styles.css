@@ -110,6 +110,8 @@ button.danger { background: #b91c1c; border-color: #b91c1c; color: #fff; }
 }
 .card.dragging { opacity: 0.4; }
 .card.selected { outline: 2px solid var(--accent); outline-offset: 1px; }
+/* Due within ~48h or overdue */
+.card.urgent { background: #3a1414; border-color: #ef4444; }
 .card .title { font-size: 0.9rem; margin-bottom: 0.4rem; }
 .card .meta { display: flex; flex-wrap: wrap; gap: 0.35rem; align-items: center; }
 

@@ -117,6 +117,46 @@ function visibleTasks() {
   });
 }
 
+// ---------- Urgency: blend deadline + priority ----------
+const PRIORITY_RANK = { high: 3, medium: 2, low: 1 };
+const URGENT_DAYS = 2; // "due within ~48h"; tile turns red at/under this
+
+function daysUntilDue(iso) {
+  if (!iso) return Infinity;
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  return Math.round((new Date(iso + "T00:00:00") - today) / 86400000);
+}
+
+// Higher score = more pressing. Deadline drives the broad order; priority
+// contributes and breaks ties within the same deadline bucket.
+function urgencyScore(t) {
+  const pr = PRIORITY_RANK[t.priority] || 2;
+  const d = daysUntilDue(t.due_date);
+  let due;
+  if (d === Infinity) due = 0;        // no due date
+  else if (d < 0) due = 6;            // overdue
+  else if (d <= URGENT_DAYS) due = 4; // within ~48h
+  else if (d <= 7) due = 2;           // this week
+  else if (d <= 14) due = 1;          // next week
+  else due = 0.5;                     // further out
+  return due * 2 + pr;
+}
+
+function byUrgency(a, b) {
+  const s = urgencyScore(b) - urgencyScore(a);
+  if (s) return s;
+  const ad = a.due_date || "9999-12-31"; // dated tasks sort before undated
+  const bd = b.due_date || "9999-12-31";
+  if (ad !== bd) return ad < bd ? -1 : 1; // sooner due date first
+  const p = (PRIORITY_RANK[b.priority] || 2) - (PRIORITY_RANK[a.priority] || 2);
+  return p || a.id - b.id;
+}
+
+function isUrgent(t) {
+  return t.status !== "done" && t.due_date != null && daysUntilDue(t.due_date) <= URGENT_DAYS;
+}
+
 function renderBoard() {
   const board = $("#board");
   board.innerHTML = "";
@@ -127,7 +167,7 @@ function renderBoard() {
   for (const col of COLUMNS) {
     const colTasks = active
       .filter((t) => t.status === col.status)
-      .sort((a, b) => a.position - b.position);
+      .sort(byUrgency);
 
     const clearBtn =
       col.status === "done"
@@ -252,6 +292,7 @@ function cardEl(t, isArchived = false) {
   const card = document.createElement("div");
   card.className = "card" + (isArchived ? " archived" : "");
   if (!isArchived && state.selected.has(t.id)) card.classList.add("selected");
+  if (!isArchived && isUrgent(t)) card.classList.add("urgent");
   if (!isArchived) card.draggable = true;
   card.dataset.id = t.id;
   if (cat) card.style.setProperty("--cat-color", cat.color);
