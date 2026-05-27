@@ -2,6 +2,7 @@ import express from "express";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import db from "./db.js";
+import { startBackups, runBackup } from "./backup.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -255,5 +256,18 @@ app.get("/api/unread/:me", (req, res) => {
   res.json({ total: items.reduce((s, i) => s + i.unread, 0), items });
 });
 
+// Trigger a backup on demand (e.g. before testing something risky).
+app.post("/api/backup", async (_req, res) => {
+  try {
+    const path = await runBackup();
+    res.json({ ok: true, path });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
+});
+
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => console.log(`Kanban running on http://localhost:${PORT}`));
+app.listen(PORT, () => {
+  console.log(`Kanban running on http://localhost:${PORT}`);
+  startBackups();
+});

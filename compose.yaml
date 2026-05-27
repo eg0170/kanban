@@ -7,6 +7,8 @@ services:
       - "3030:3000"   # host 3030 (3000 is taken by Homepage) -> container 3000
     volumes:
       - kanban-data:/data
+      # For off-volume backups, uncomment and set BACKUP_DIR=/backups above:
+      # - /srv/backups/kanban:/backups
     environment:
       - PORT=3000
       - DB_PATH=/data/kanban.db
@@ -16,6 +18,14 @@ services:
       # - DEFAULT_PERSON1=Person 1
       # - DEFAULT_PERSON2=Person 2
       # - DEFAULT_CATEGORIES=Home,Health,Work,Errands
+      # Automated SQLite backups (consistent online snapshots).
+      # Default: a backup every 24h to /data/backups (inside the volume),
+      # keeping the most recent 14. Tune or disable here:
+      # - BACKUP_INTERVAL_HOURS=24   # 0 disables automated backups
+      # - BACKUP_KEEP=14
+      # For disaster recovery, store backups OUTSIDE the volume by setting
+      # BACKUP_DIR and bind-mounting a host path (e.g. your NAS):
+      # - BACKUP_DIR=/backups
     labels:
       # Opt this container in to Watchtower auto-updates.
       - "com.centurylinklabs.watchtower.enable=true"
