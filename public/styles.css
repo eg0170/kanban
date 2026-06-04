@@ -263,6 +263,8 @@ dialog .row label { flex: 1; }
 .section-label { font-size: 0.7rem; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin: 0.5rem 0 0; }
 .color-field { flex: 0 0 auto; }
 .color-field input[type=color] { width: 48px; height: 34px; padding: 2px; }
+.section-hint { font-size: 0.78rem; color: var(--muted); margin: 0.25rem 0 0.5rem; line-height: 1.35; }
+.push-actions { display: flex; gap: 0.5rem; }
 
 #cat-list { list-style: none; padding: 0; margin: 0 0 1rem; display: flex; flex-direction: column; gap: 0.5rem; }
 #cat-list li { display: flex; align-items: center; gap: 0.5rem; }

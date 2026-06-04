@@ -713,6 +713,7 @@ $("#btn-settings").addEventListener("click", () => {
   $("#set-color-p2").value = state.settings.color_p2;
   $("#set-color-joint").value = state.settings.color_joint;
   $("#set-color-unassigned").value = state.settings.color_unassigned;
+  renderPushUI();
   $("#settings-dialog").showModal();
 });
 $("#bulk-edit").addEventListener("click", openBulkDialog);
@@ -753,6 +754,107 @@ function fmtDateTime(s) {
   const d = new Date(s.replace(" ", "T") + "Z");
   return d.toLocaleString(undefined, { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" });
 }
+
+// ---------- Web Push (PWA) ----------
+const PUSH_SUPPORTED = "serviceWorker" in navigator && "PushManager" in window;
+
+function isIOS() { return /iP(hone|ad|od)/.test(navigator.userAgent); }
+function isStandalone() {
+  return window.matchMedia("(display-mode: standalone)").matches || window.navigator.standalone === true;
+}
+
+function urlBase64ToUint8Array(base64) {
+  const padding = "=".repeat((4 - (base64.length % 4)) % 4);
+  const b64 = (base64 + padding).replace(/-/g, "+").replace(/_/g, "/");
+  const raw = atob(b64);
+  const out = new Uint8Array(raw.length);
+  for (let i = 0; i < raw.length; i++) out[i] = raw.charCodeAt(i);
+  return out;
+}
+
+async function getRegistration() {
+  if (!PUSH_SUPPORTED) return null;
+  return (await navigator.serviceWorker.getRegistration()) || (await navigator.serviceWorker.register("/sw.js"));
+}
+
+async function currentSubscription() {
+  const reg = await getRegistration();
+  return reg ? reg.pushManager.getSubscription() : null;
+}
+
+async function enablePush() {
+  if (!state.me) { openWhoami(); return; }
+  const reg = await getRegistration();
+  if (!reg) return;
+  const perm = await Notification.requestPermission();
+  if (perm !== "granted") { await renderPushUI(); return; }
+  const { key } = await api.get("/api/push/public-key");
+  let sub = await reg.pushManager.getSubscription();
+  if (!sub) {
+    sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlBase64ToUint8Array(key) });
+  }
+  await api.send("POST", "/api/push/subscribe", { person: state.me, subscription: sub.toJSON() });
+  await renderPushUI();
+}
+
+async function disablePush() {
+  const sub = await currentSubscription();
+  if (sub) {
+    const endpoint = sub.endpoint;
+    await sub.unsubscribe();
+    await api.send("POST", "/api/push/unsubscribe", { endpoint });
+  }
+  await renderPushUI();
+}
+
+async function renderPushUI() {
+  const status = $("#push-status");
+  const toggle = $("#push-toggle");
+  const test = $("#push-test");
+  test.hidden = true;
+  toggle.disabled = false;
+
+  if (!PUSH_SUPPORTED) {
+    status.textContent = "Push notifications aren't supported in this browser.";
+    toggle.hidden = true;
+    return;
+  }
+  if (isIOS() && !isStandalone()) {
+    status.textContent = "On iPhone: tap Share → Add to Home Screen, then open this app from your Home Screen to enable notifications.";
+    toggle.hidden = true;
+    return;
+  }
+  toggle.hidden = false;
+  if (Notification.permission === "denied") {
+    status.textContent = "Notifications are blocked. Allow them for this site in your browser settings.";
+    toggle.disabled = true;
+    return;
+  }
+  const sub = await currentSubscription();
+  if (sub) {
+    status.textContent = `Notifications ON for ${meName()} on this device.`;
+    toggle.textContent = "Disable";
+    test.hidden = false;
+  } else {
+    status.textContent = `Notifications off. Enable to get a daily digest for ${meName()}.`;
+    toggle.textContent = "Enable";
+  }
+}
+
+$("#push-toggle").addEventListener("click", async () => {
+  $("#push-toggle").disabled = true;
+  const sub = await currentSubscription();
+  if (sub) await disablePush();
+  else await enablePush();
+});
+
+$("#push-test").addEventListener("click", async () => {
+  if (!state.me) return;
+  await api.send("POST", "/api/notify/test", { person: state.me });
+});
+
+// Pre-register the SW so the subscription flow is instant when the user opts in.
+if (PUSH_SUPPORTED) navigator.serviceWorker.register("/sw.js").catch(() => {});
 
 state.me = getMe();
 loadAll().then(() => { if (!state.me) openWhoami(); });

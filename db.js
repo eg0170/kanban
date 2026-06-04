@@ -61,6 +61,15 @@ db.exec(`
     last_read_id INTEGER NOT NULL DEFAULT 0,
     PRIMARY KEY (task_id, person)
   );
+
+  CREATE TABLE IF NOT EXISTS push_subscriptions (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    person     TEXT NOT NULL,
+    endpoint   TEXT NOT NULL UNIQUE,
+    p256dh     TEXT NOT NULL,
+    auth       TEXT NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
 `);
 
 // Seed defaults on first run. Everything below is overridable via env vars so

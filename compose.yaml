@@ -22,6 +22,13 @@ services:
       - BACKUP_DIR=/backups
       # - BACKUP_INTERVAL_HOURS=24   # 0 disables automated backups
       # - BACKUP_KEEP=14
+      # Daily push-notification digest. VAPID keys auto-generate on first
+      # run and persist in the data volume at /data/vapid.json. The APP_URL
+      # is the link a notification opens to.
+      # - APP_URL=https://todo.elovitz.net
+      # - NOTIFY_TIME=07:00          # HH:MM, in the timezone below
+      # - NOTIFY_TZ=America/New_York
+      # - VAPID_SUBJECT=mailto:you@example.com
     labels:
       # Opt this container in to Watchtower auto-updates.
       - "com.centurylinklabs.watchtower.enable=true"

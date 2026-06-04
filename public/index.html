@@ -5,6 +5,12 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Household Kanban</title>
   <link rel="stylesheet" href="styles.css" />
+  <link rel="manifest" href="/manifest.webmanifest" />
+  <link rel="icon" type="image/svg+xml" href="/icon.svg" />
+  <link rel="apple-touch-icon" href="/icon.svg" />
+  <meta name="theme-color" content="#6366f1" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-title" content="Kanban" />
 </head>
 <body>
   <header>
@@ -193,6 +199,12 @@
       <div class="row">
         <label class="color-field">Joint<input type="color" id="set-color-joint" /></label>
         <label class="color-field">Unassigned<input type="color" id="set-color-unassigned" /></label>
+      </div>
+      <p class="section-label">Daily push notifications (this device)</p>
+      <p id="push-status" class="section-hint">Loading…</p>
+      <div class="push-actions">
+        <button type="button" id="push-toggle">Enable</button>
+        <button type="button" id="push-test" hidden>Send test</button>
       </div>
       <div class="dialog-actions">
         <span class="spacer"></span>

@@ -3,6 +3,7 @@ import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 import db from "./db.js";
 import { startBackups, runBackup } from "./backup.js";
+import * as notify from "./notify.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
@@ -296,6 +297,35 @@ app.get("/api/unread/:me", (req, res) => {
   res.json({ total: items.reduce((s, i) => s + i.unread, 0), items });
 });
 
+// ---------- Push notifications ----------
+app.get("/api/push/public-key", (_req, res) => res.json({ key: notify.getPublicKey() }));
+
+app.post("/api/push/subscribe", (req, res) => {
+  const person = PEOPLE.includes(req.body.person) ? req.body.person : null;
+  if (!person || !req.body.subscription) return res.status(400).json({ error: "person + subscription required" });
+  notify.saveSubscription(person, req.body.subscription);
+  res.json({ ok: true });
+});
+
+app.post("/api/push/unsubscribe", (req, res) => {
+  if (!req.body.endpoint) return res.status(400).json({ error: "endpoint required" });
+  notify.removeSubscription(req.body.endpoint);
+  res.json({ ok: true });
+});
+
+app.post("/api/notify/test", async (req, res) => {
+  const person = PEOPLE.includes(req.body.person) ? req.body.person : null;
+  if (!person) return res.status(400).json({ error: "person required" });
+  const sent = await notify.sendTest(person);
+  res.json({ ok: true, sent });
+});
+
+// Trigger today's digest immediately (useful for manual test / cron-style external trigger).
+app.post("/api/notify/run", async (_req, res) => {
+  await notify.sendAllDigests();
+  res.json({ ok: true });
+});
+
 // Trigger a backup on demand (e.g. before testing something risky).
 app.post("/api/backup", async (_req, res) => {
   try {
@@ -310,4 +340,5 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Kanban running on http://localhost:${PORT}`);
   startBackups();
+  notify.init();
 });
