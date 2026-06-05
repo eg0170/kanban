@@ -398,9 +398,10 @@ function openTaskDialog(task, initialTab = "details") {
   tabBadge.textContent = unread;
   setTab(isEdit ? initialTab : "details");
 
-  // Images attach to an existing task only; for a new task show a hint.
-  $("#task-images").hidden = !isEdit;
-  $("#task-images-hint").hidden = isEdit;
+  // Images work for both new and existing tasks. For a new task they're queued
+  // client-side and uploaded right after the task is created on Save.
+  $("#task-images").hidden = false;
+  pendingImages = [];
   if (isEdit) renderAttachments(task.id);
   else $("#image-thumbs").innerHTML = "";
 
@@ -408,6 +409,8 @@ function openTaskDialog(task, initialTab = "details") {
 }
 
 // ---------- Image attachments ----------
+let pendingImages = []; // resized images queued for a not-yet-saved task
+
 async function renderAttachments(taskId) {
   const wrap = $("#image-thumbs");
   const items = await api.get(`/api/tasks/${taskId}/attachments`);
@@ -418,6 +421,17 @@ async function renderAttachments(taskId) {
           <img src="/api/attachments/${a.id}" alt="${escapeHtml(a.filename || "image")}" loading="lazy" />
         </a>
         <button type="button" class="thumb-del" data-id="${a.id}" title="Remove">&times;</button>
+      </div>`
+    )
+    .join("");
+}
+
+function renderPendingThumbs() {
+  $("#image-thumbs").innerHTML = pendingImages
+    .map(
+      (img, i) => `<div class="thumb" data-pending="${i}">
+        <img src="data:${img.mime};base64,${img.base64}" alt="${escapeHtml(img.filename || "image")}" />
+        <button type="button" class="thumb-del" data-pending="${i}" title="Remove">&times;</button>
       </div>`
     )
     .join("");
@@ -457,19 +471,26 @@ function resizeImage(file, maxDim = 1600, quality = 0.85) {
   });
 }
 
-async function uploadImages(files) {
-  const taskId = $("#task-id").value;
-  if (!taskId) return;
+async function addImageFiles(files) {
+  const imgs = [...files].filter((f) => f.type.startsWith("image/"));
+  if (!imgs.length) return;
   const btn = $("#image-add-btn");
   btn.disabled = true;
-  btn.textContent = "Uploading…";
+  btn.textContent = "Adding…";
   try {
-    for (const file of files) {
-      if (!file.type.startsWith("image/")) continue;
-      const { mime, base64, filename } = await resizeImage(file);
-      await api.send("POST", `/api/tasks/${taskId}/attachments`, { mime, data: base64, filename });
+    const taskId = $("#task-id").value;
+    for (const file of imgs) {
+      const img = await resizeImage(file);
+      if (taskId) {
+        // Existing task: upload immediately.
+        await api.send("POST", `/api/tasks/${taskId}/attachments`, { mime: img.mime, data: img.base64, filename: img.filename });
+      } else {
+        // New task: queue until the task is saved.
+        pendingImages.push(img);
+      }
     }
-    await renderAttachments(taskId);
+    if (taskId) await renderAttachments(taskId);
+    else renderPendingThumbs();
   } catch (e) {
     alert("Couldn't add image: " + e.message);
   } finally {
@@ -482,12 +503,30 @@ $("#image-add-btn").addEventListener("click", () => $("#image-input").click());
 $("#image-input").addEventListener("change", async (e) => {
   const files = [...e.target.files];
   e.target.value = ""; // allow re-selecting the same file
-  if (files.length) await uploadImages(files);
+  if (files.length) await addImageFiles(files);
 });
+
+// Paste an image anywhere in the task dialog to attach it.
+$("#task-dialog").addEventListener("paste", async (e) => {
+  const files = [...(e.clipboardData?.items || [])]
+    .filter((it) => it.kind === "file" && it.type.startsWith("image/"))
+    .map((it) => it.getAsFile())
+    .filter(Boolean);
+  if (files.length) {
+    e.preventDefault();
+    await addImageFiles(files);
+  }
+});
+
 $("#image-thumbs").addEventListener("click", async (e) => {
   const del = e.target.closest(".thumb-del");
   if (!del) return;
   e.preventDefault();
+  if (del.dataset.pending !== undefined) {
+    pendingImages.splice(Number(del.dataset.pending), 1);
+    renderPendingThumbs();
+    return;
+  }
   if (confirm("Remove this image?")) {
     await api.send("DELETE", `/api/attachments/${del.dataset.id}`);
     await renderAttachments($("#task-id").value);
@@ -507,8 +546,18 @@ $("#task-form").addEventListener("submit", async (e) => {
     due_date: $("#task-due").value || null,
     actor: state.me,
   };
-  if (id) await api.send("PUT", `/api/tasks/${id}`, payload);
-  else await api.send("POST", "/api/tasks", payload);
+  if (id) {
+    await api.send("PUT", `/api/tasks/${id}`, payload);
+  } else {
+    const created = await api.send("POST", "/api/tasks", payload);
+    // Upload any images queued while the task was still unsaved.
+    if (created && created.id) {
+      for (const img of pendingImages) {
+        await api.send("POST", `/api/tasks/${created.id}/attachments`, { mime: img.mime, data: img.base64, filename: img.filename });
+      }
+    }
+  }
+  pendingImages = [];
   $("#task-dialog").close(); // 'close' listener reloads the board.
 });
 
