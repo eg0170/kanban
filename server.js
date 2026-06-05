@@ -216,6 +216,7 @@ function announceDone(taskId, actor) {
     .prepare("INSERT INTO messages (task_id, sender, body) VALUES (?, ?, ?)")
     .run(taskId, actor, DONE_NOTE);
   markRead(taskId, actor, info.lastInsertRowid); // actor has "read" their own note
+  notify.notifyMessage(taskId, actor, DONE_NOTE).catch((e) => console.error("[notify] done push failed:", e.message));
 }
 
 app.get("/api/tasks/:id/messages", (req, res) => {
@@ -234,6 +235,8 @@ app.post("/api/tasks/:id/messages", (req, res) => {
     .run(req.params.id, sender, body);
   // The sender has implicitly read up to their own message.
   markRead(req.params.id, sender, info.lastInsertRowid);
+  // Instant push to the other person (fire-and-forget; don't delay response).
+  notify.notifyMessage(req.params.id, sender, body).catch((e) => console.error("[notify] message push failed:", e.message));
   res.json(db.prepare("SELECT * FROM messages WHERE id = ?").get(info.lastInsertRowid));
 });
 

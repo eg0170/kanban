@@ -138,6 +138,28 @@ export async function sendAllDigests() {
   }
 }
 
+// Person name lookup from settings (for "Steve said …" titles).
+function senderName(p) {
+  const row = db.prepare("SELECT value FROM settings WHERE key = ?").get(p === "p1" ? "person1" : "person2");
+  return row?.value || (p === "p1" ? "Person 1" : "Person 2");
+}
+
+// Instant push when a new chat message lands — to the OTHER person only.
+// This also covers "task marked Done" because announceDone() inserts a
+// message, so the same call sends both kinds of pings.
+export async function notifyMessage(taskId, sender, body) {
+  if (sender !== "p1" && sender !== "p2") return 0;
+  const task = db.prepare("SELECT title FROM tasks WHERE id = ?").get(taskId);
+  if (!task) return 0;
+  const other = sender === "p1" ? "p2" : "p1";
+  const trimmed = body.length > 140 ? body.slice(0, 140) + "…" : body;
+  return sendToPerson(other, {
+    title: `${senderName(sender)} · ${task.title}`,
+    body: trimmed,
+    url: APP_URL,
+  });
+}
+
 export async function sendTest(person) {
   return sendToPerson(person, {
     title: "Kanban test",
