@@ -312,6 +312,7 @@ function cardEl(t, isArchived = false) {
       <span class="tag owner" style="background:${ownerColor(t.owner)}">${escapeHtml(ownerName(t.owner))}</span>
       ${due}
       ${state.unread.map[t.id] ? `<span class="tag unread" title="Unread messages">💬 ${state.unread.map[t.id]}</span>` : ""}
+      ${t.attachment_count ? `<span class="tag attach" title="Images">📎 ${t.attachment_count}</span>` : ""}
       ${isArchived ? `<button class="restore" title="Restore to Done">Restore</button>` : ""}
     </div>`;
 
@@ -397,8 +398,101 @@ function openTaskDialog(task, initialTab = "details") {
   tabBadge.textContent = unread;
   setTab(isEdit ? initialTab : "details");
 
+  // Images attach to an existing task only; for a new task show a hint.
+  $("#task-images").hidden = !isEdit;
+  $("#task-images-hint").hidden = isEdit;
+  if (isEdit) renderAttachments(task.id);
+  else $("#image-thumbs").innerHTML = "";
+
   $("#task-dialog").showModal();
 }
+
+// ---------- Image attachments ----------
+async function renderAttachments(taskId) {
+  const wrap = $("#image-thumbs");
+  const items = await api.get(`/api/tasks/${taskId}/attachments`);
+  wrap.innerHTML = items
+    .map(
+      (a) => `<div class="thumb" data-id="${a.id}">
+        <a href="/api/attachments/${a.id}" target="_blank" rel="noopener noreferrer">
+          <img src="/api/attachments/${a.id}" alt="${escapeHtml(a.filename || "image")}" loading="lazy" />
+        </a>
+        <button type="button" class="thumb-del" data-id="${a.id}" title="Remove">&times;</button>
+      </div>`
+    )
+    .join("");
+}
+
+// Downscale + re-encode in the browser so stored images stay small (keeps the
+// SQLite DB and its backups lean). Returns { mime, base64, filename }.
+function resizeImage(file, maxDim = 1600, quality = 0.85) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      let { width, height } = img;
+      if (width > maxDim || height > maxDim) {
+        const scale = maxDim / Math.max(width, height);
+        width = Math.round(width * scale);
+        height = Math.round(height * scale);
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+      const finish = (blob, mime) => {
+        const reader = new FileReader();
+        reader.onload = () => resolve({ mime, base64: reader.result.split(",")[1], filename: file.name });
+        reader.onerror = reject;
+        reader.readAsDataURL(blob);
+      };
+      canvas.toBlob((b) => {
+        if (b) finish(b, "image/webp");
+        else canvas.toBlob((j) => (j ? finish(j, "image/jpeg") : reject(new Error("encode failed"))), "image/jpeg", quality);
+      }, "image/webp", quality);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); reject(new Error("not an image")); };
+    img.src = url;
+  });
+}
+
+async function uploadImages(files) {
+  const taskId = $("#task-id").value;
+  if (!taskId) return;
+  const btn = $("#image-add-btn");
+  btn.disabled = true;
+  btn.textContent = "Uploading…";
+  try {
+    for (const file of files) {
+      if (!file.type.startsWith("image/")) continue;
+      const { mime, base64, filename } = await resizeImage(file);
+      await api.send("POST", `/api/tasks/${taskId}/attachments`, { mime, data: base64, filename });
+    }
+    await renderAttachments(taskId);
+  } catch (e) {
+    alert("Couldn't add image: " + e.message);
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "+ Add image";
+  }
+}
+
+$("#image-add-btn").addEventListener("click", () => $("#image-input").click());
+$("#image-input").addEventListener("change", async (e) => {
+  const files = [...e.target.files];
+  e.target.value = ""; // allow re-selecting the same file
+  if (files.length) await uploadImages(files);
+});
+$("#image-thumbs").addEventListener("click", async (e) => {
+  const del = e.target.closest(".thumb-del");
+  if (!del) return;
+  e.preventDefault();
+  if (confirm("Remove this image?")) {
+    await api.send("DELETE", `/api/attachments/${del.dataset.id}`);
+    await renderAttachments($("#task-id").value);
+  }
+});
 
 $("#task-form").addEventListener("submit", async (e) => {
   e.preventDefault();

@@ -61,6 +61,15 @@
         <input type="hidden" id="task-id" />
         <label>Title<input id="task-title" required maxlength="200" /></label>
         <label>Notes<textarea id="task-notes" rows="3"></textarea></label>
+        <div id="task-images" hidden>
+          <div class="images-head">
+            <span class="section-label">Images</span>
+            <button type="button" id="image-add-btn">+ Add image</button>
+          </div>
+          <input type="file" id="image-input" accept="image/*" multiple hidden />
+          <div id="image-thumbs"></div>
+        </div>
+        <p id="task-images-hint" class="section-hint" hidden>Save the task first to attach images.</p>
         <div class="row">
           <label>Category<select id="task-category"></select></label>
           <label>Priority

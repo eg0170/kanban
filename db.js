@@ -62,6 +62,16 @@ db.exec(`
     PRIMARY KEY (task_id, person)
   );
 
+  CREATE TABLE IF NOT EXISTS attachments (
+    id         INTEGER PRIMARY KEY AUTOINCREMENT,
+    task_id    INTEGER NOT NULL REFERENCES tasks(id) ON DELETE CASCADE,
+    filename   TEXT,
+    mime       TEXT NOT NULL,
+    data       BLOB NOT NULL,
+    created_at TEXT NOT NULL DEFAULT (datetime('now'))
+  );
+  CREATE INDEX IF NOT EXISTS idx_attachments_task ON attachments(task_id);
+
   CREATE TABLE IF NOT EXISTS push_subscriptions (
     id         INTEGER PRIMARY KEY AUTOINCREMENT,
     person     TEXT NOT NULL,

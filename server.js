@@ -7,7 +7,7 @@ import * as notify from "./notify.js";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: "12mb" })); // headroom for base64-encoded image uploads
 app.use(express.static(join(__dirname, "public")));
 
 const STATUSES = ["backlog", "todo", "in_progress", "done"];
@@ -81,7 +81,14 @@ app.delete("/api/categories/:id", (req, res) => {
 
 // ---- Tasks ----
 app.get("/api/tasks", (_req, res) => {
-  res.json(db.prepare("SELECT * FROM tasks ORDER BY status, position, id").all());
+  res.json(
+    db
+      .prepare(
+        `SELECT t.*, (SELECT COUNT(*) FROM attachments a WHERE a.task_id = t.id) AS attachment_count
+         FROM tasks t ORDER BY t.status, t.position, t.id`
+      )
+      .all()
+  );
 });
 
 app.post("/api/tasks", (req, res) => {
@@ -298,6 +305,53 @@ app.get("/api/unread/:me", (req, res) => {
     })
     .sort((a, b) => (a.last_at < b.last_at ? 1 : -1));
   res.json({ total: items.reduce((s, i) => s + i.unread, 0), items });
+});
+
+// ---------- Attachments (images on a task's notes) ----------
+// Raster image types only — SVG is excluded since it can carry script.
+const ALLOWED_IMAGE_MIME = ["image/png", "image/jpeg", "image/webp", "image/gif"];
+const MAX_ATTACHMENT_BYTES = 10 * 1024 * 1024;
+
+app.get("/api/tasks/:id/attachments", (req, res) => {
+  res.json(
+    db
+      .prepare("SELECT id, filename, mime, created_at FROM attachments WHERE task_id = ? ORDER BY id")
+      .all(req.params.id)
+  );
+});
+
+app.post("/api/tasks/:id/attachments", (req, res) => {
+  const task = db.prepare("SELECT id FROM tasks WHERE id = ?").get(req.params.id);
+  if (!task) return res.status(404).json({ error: "not found" });
+  const { mime, data, filename } = req.body;
+  if (!ALLOWED_IMAGE_MIME.includes(mime)) return res.status(400).json({ error: "unsupported image type" });
+  if (typeof data !== "string" || !data) return res.status(400).json({ error: "data required" });
+  let buf;
+  try {
+    buf = Buffer.from(data, "base64");
+  } catch {
+    return res.status(400).json({ error: "invalid base64" });
+  }
+  if (buf.length === 0 || buf.length > MAX_ATTACHMENT_BYTES)
+    return res.status(400).json({ error: "image too large or empty" });
+  const info = db
+    .prepare("INSERT INTO attachments (task_id, filename, mime, data) VALUES (?, ?, ?, ?)")
+    .run(req.params.id, (filename || "image").slice(0, 200), mime, buf);
+  res.json(db.prepare("SELECT id, filename, mime, created_at FROM attachments WHERE id = ?").get(info.lastInsertRowid));
+});
+
+app.get("/api/attachments/:id", (req, res) => {
+  const a = db.prepare("SELECT mime, data FROM attachments WHERE id = ?").get(req.params.id);
+  if (!a) return res.status(404).end();
+  res.set("Content-Type", a.mime);
+  res.set("X-Content-Type-Options", "nosniff");
+  res.set("Cache-Control", "private, max-age=86400");
+  res.send(a.data);
+});
+
+app.delete("/api/attachments/:id", (req, res) => {
+  db.prepare("DELETE FROM attachments WHERE id = ?").run(req.params.id);
+  res.json({ ok: true });
 });
 
 // ---------- Push notifications ----------
