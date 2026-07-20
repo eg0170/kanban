@@ -49,6 +49,18 @@ export function removeSubscription(endpoint) {
 }
 
 // ---------- Digest ----------
+// "Today" in the household's timezone. SQLite's date('now') is UTC, which
+// would shift the urgency window by up to a day around midnight; the board's
+// red-card logic uses local midnight, so the digest must match.
+function todayInTz() {
+  try {
+    // en-CA formats as YYYY-MM-DD, which is what SQLite's date() expects.
+    return new Date().toLocaleDateString("en-CA", { timeZone: NOTIFY_TZ });
+  } catch {
+    return new Date().toISOString().slice(0, 10); // bad TZ -> fall back to UTC
+  }
+}
+
 // Urgent for `person`: tasks owned by them or marked Joint, not done, not
 // archived, with a due date within 2 days (or overdue).
 function getUrgent(person) {
@@ -59,11 +71,11 @@ function getUrgent(person) {
          AND status != 'done'
          AND (owner = ? OR owner = 'joint')
          AND due_date IS NOT NULL
-         AND date(due_date) <= date('now', '+2 day')
+         AND date(due_date) <= date(?, '+2 day')
        ORDER BY date(due_date) ASC, id ASC
        LIMIT 10`
     )
-    .all(person);
+    .all(person, todayInTz());
 }
 
 // Fallback: unclaimed backlog items either of you can grab.

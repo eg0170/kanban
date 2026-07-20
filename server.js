@@ -13,6 +13,19 @@ app.use(express.static(join(__dirname, "public")));
 const STATUSES = ["backlog", "todo", "in_progress", "done"];
 const PRIORITIES = ["low", "medium", "high"];
 const OWNERS = ["unassigned", "joint", "p1", "p2"];
+const HEX_COLOR = /^#[0-9a-fA-F]{6}$/;
+
+// Monotonic data version so clients can cheaply detect "something changed
+// since I last looked" and refresh the board (live sync via polling).
+// Seeded from the clock so it also changes across server restarts.
+let dataVersion = Date.now();
+app.use("/api", (req, res, next) => {
+  if (req.method !== "GET") {
+    res.on("finish", () => { if (res.statusCode < 400) dataVersion++; });
+  }
+  next();
+});
+app.get("/api/version", (_req, res) => res.json({ v: dataVersion }));
 
 // Owner/status coupling: an unassigned task belongs in the backlog grab pile;
 // the moment it has an owner it shouldn't sit in backlog, so it moves to To Do.
@@ -58,7 +71,9 @@ app.post("/api/categories", (req, res) => {
   const pos = db.prepare("SELECT COALESCE(MAX(position), -1) + 1 AS p FROM categories").get().p;
   const info = db
     .prepare("INSERT INTO categories (name, color, position) VALUES (?, ?, ?)")
-    .run(name.trim(), color || "#6b7280", pos);
+    // Colors are injected into inline styles client-side, so enforce a strict
+    // #rrggbb format server-side (stored-XSS guard).
+    .run(name.trim(), HEX_COLOR.test(color) ? color : "#6b7280", pos);
   res.json(db.prepare("SELECT * FROM categories WHERE id = ?").get(info.lastInsertRowid));
 });
 
@@ -68,7 +83,7 @@ app.put("/api/categories/:id", (req, res) => {
   if (!existing) return res.status(404).json({ error: "not found" });
   db.prepare("UPDATE categories SET name = ?, color = ? WHERE id = ?").run(
     name?.trim() || existing.name,
-    color || existing.color,
+    HEX_COLOR.test(color) ? color : existing.color,
     req.params.id
   );
   res.json(db.prepare("SELECT * FROM categories WHERE id = ?").get(req.params.id));
@@ -123,8 +138,16 @@ app.put("/api/tasks/:id", (req, res) => {
   const t = db.prepare("SELECT * FROM tasks WHERE id = ?").get(req.params.id);
   if (!t) return res.status(404).json({ error: "not found" });
   const b = req.body;
-  const owner = OWNERS.includes(b.owner) ? b.owner : t.owner;
-  const status = coupleStatus(owner, STATUSES.includes(b.status) ? b.status : t.status);
+  const ownerProvided = OWNERS.includes(b.owner);
+  let owner = ownerProvided ? b.owner : t.owner;
+  const reqStatus = STATUSES.includes(b.status) ? b.status : t.status;
+  // Moving an unassigned task out of Backlog claims it for the actor — same
+  // rule as drag — unless the request explicitly sets an owner. Without this,
+  // coupleStatus would bounce "unassigned + done" straight back to Backlog.
+  if (!ownerProvided && owner === "unassigned" && reqStatus !== "backlog" && PEOPLE.includes(b.actor)) {
+    owner = b.actor;
+  }
+  const status = coupleStatus(owner, reqStatus);
   db.prepare(
     `UPDATE tasks SET
        title = ?, notes = ?, category_id = ?, priority = ?, owner = ?,
@@ -373,14 +396,22 @@ app.post("/api/push/unsubscribe", (req, res) => {
 app.post("/api/notify/test", async (req, res) => {
   const person = PEOPLE.includes(req.body.person) ? req.body.person : null;
   if (!person) return res.status(400).json({ error: "person required" });
-  const sent = await notify.sendTest(person);
-  res.json({ ok: true, sent });
+  try {
+    const sent = await notify.sendTest(person);
+    res.json({ ok: true, sent });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // Trigger today's digest immediately (useful for manual test / cron-style external trigger).
 app.post("/api/notify/run", async (_req, res) => {
-  await notify.sendAllDigests();
-  res.json({ ok: true });
+  try {
+    await notify.sendAllDigests();
+    res.json({ ok: true });
+  } catch (e) {
+    res.status(500).json({ error: e.message });
+  }
 });
 
 // Trigger a backup on demand (e.g. before testing something risky).
@@ -391,6 +422,12 @@ app.post("/api/backup", async (_req, res) => {
   } catch (e) {
     res.status(500).json({ error: e.message });
   }
+});
+
+// Never let a stray rejected promise take down the household board — log it
+// and keep serving. (Modern Node crashes the process by default.)
+process.on("unhandledRejection", (err) => {
+  console.error("[fatal-averted] unhandled rejection:", err?.stack || err);
 });
 
 const PORT = process.env.PORT || 3000;

@@ -25,16 +25,49 @@ const state = {
 };
 
 const $ = (sel) => document.querySelector(sel);
-const api = {
-  async get(url) { return (await fetch(url)).json(); },
-  async send(method, url, body) {
-    const r = await fetch(url, {
+
+// ---------- Toasts ----------
+function showToast(message) {
+  const wrap = $("#toasts");
+  // Dedupe: don't stack identical messages (e.g. repeated poll failures).
+  if ([...wrap.children].some((t) => t.textContent === message)) return;
+  const el = document.createElement("div");
+  el.className = "toast";
+  el.textContent = message;
+  wrap.appendChild(el);
+  setTimeout(() => el.remove(), 4000);
+}
+
+// ---------- API (errors are surfaced, not swallowed) ----------
+let pollingQuietly = false; // background polls shouldn't toast on every tick
+
+async function request(method, url, body) {
+  let r;
+  try {
+    r = await fetch(url, {
       method,
-      headers: { "Content-Type": "application/json" },
-      body: body ? JSON.stringify(body) : undefined,
+      headers: body !== undefined ? { "Content-Type": "application/json" } : undefined,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
     });
-    return r.json();
-  },
+  } catch (e) {
+    if (!pollingQuietly) showToast("Network error — couldn't reach the server");
+    throw e;
+  }
+  if (!r.ok) {
+    let msg = `Request failed (${r.status})`;
+    try {
+      const j = await r.json();
+      if (j.error) msg = j.error;
+    } catch { /* non-JSON error body */ }
+    if (!pollingQuietly) showToast(msg);
+    throw new Error(msg);
+  }
+  return r.json();
+}
+
+const api = {
+  get: (url) => request("GET", url),
+  send: (method, url, body) => request(method, url, body),
 };
 
 function ownerName(owner) {
@@ -61,15 +94,19 @@ function meName() {
 }
 
 // ---------- Load ----------
+let dataVersion = null; // server-side change counter; drives live board sync
+
 async function loadAll() {
-  const [tasks, categories, settings] = await Promise.all([
+  const [tasks, categories, settings, version] = await Promise.all([
     api.get("/api/tasks"),
     api.get("/api/categories"),
     api.get("/api/settings"),
+    api.get("/api/version"),
   ]);
   state.tasks = tasks;
   state.categories = categories;
   state.settings = settings;
+  dataVersion = version.v;
   // Drop selections for tasks that no longer exist.
   const ids = new Set(tasks.map((t) => t.id));
   [...state.selected].forEach((id) => { if (!ids.has(id)) state.selected.delete(id); });
@@ -377,8 +414,11 @@ function fillOwnerSelect(sel, selected) {
   if (selected) sel.value = selected;
 }
 
+let editingOriginal = null; // snapshot for changed-fields-only saves
+
 function openTaskDialog(task, initialTab = "details") {
   const isEdit = !!task;
+  editingOriginal = isEdit ? { ...task } : null;
   $("#task-dialog-title").textContent = isEdit ? "Edit task" : "New task";
   $("#task-id").value = isEdit ? task.id : "";
   $("#task-title").value = isEdit ? task.title : "";
@@ -547,7 +587,21 @@ $("#task-form").addEventListener("submit", async (e) => {
     actor: state.me,
   };
   if (id) {
-    await api.send("PUT", `/api/tasks/${id}`, payload);
+    // Send only the fields that actually changed, so a stale form can't
+    // clobber edits the other person made while this dialog was open. This
+    // also lets the server auto-claim unassigned tasks moved out of Backlog
+    // (owner is omitted when untouched).
+    const diff = { actor: state.me };
+    let changed = false;
+    for (const key of ["title", "notes", "category_id", "priority", "owner", "status", "due_date"]) {
+      const before = editingOriginal ? editingOriginal[key] ?? null : null;
+      const after = payload[key] ?? null;
+      if (String(before ?? "") !== String(after ?? "")) {
+        diff[key] = payload[key];
+        changed = true;
+      }
+    }
+    if (changed) await api.send("PUT", `/api/tasks/${id}`, diff);
   } else {
     const created = await api.send("POST", "/api/tasks", payload);
     // Upload any images queued while the task was still unsaved.
@@ -746,8 +800,19 @@ function patchUnreadBadges() {
 
 async function pollUnread() {
   if (!state.me) return;
-  await loadUnread(); // refreshes state.unread + inbox button
-  patchUnreadBadges();
+
+  // Live board sync: if anything changed server-side (the other person added,
+  // moved, or edited something), re-render the whole board. Skip mid-drag so
+  // we never yank a card out from under the cursor. loadAll() also refreshes
+  // unread state, so the badge patching below is only needed when unchanged.
+  const { v } = await api.get("/api/version");
+  if (dataVersion !== null && v !== dataVersion && !document.querySelector(".card.dragging")) {
+    await loadAll(); // updates dataVersion itself
+  } else {
+    dataVersion = v;
+    await loadUnread(); // refreshes state.unread + inbox button
+    patchUnreadBadges();
+  }
   if ($("#inbox-dialog").open) renderInbox();
 
   const dlg = $("#task-dialog");
@@ -777,9 +842,25 @@ async function pollUnread() {
   }
 }
 
-setInterval(() => {
-  if (document.visibilityState === "visible") pollUnread();
+setInterval(async () => {
+  if (document.visibilityState !== "visible") return;
+  pollingQuietly = true;
+  try {
+    await pollUnread();
+  } catch { /* transient poll failure — next tick will retry */ }
+  finally {
+    pollingQuietly = false;
+  }
 }, 15000);
+
+// Also sync immediately when the app regains focus (e.g. phone unlocked),
+// so you don't wait up to 15s to see the other person's changes.
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") {
+    pollingQuietly = true;
+    pollUnread().catch(() => {}).finally(() => { pollingQuietly = false; });
+  }
+});
 
 // ---------- Categories dialog ----------
 function renderCategoryFilter() {

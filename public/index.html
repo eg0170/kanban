@@ -7,7 +7,8 @@
   <link rel="stylesheet" href="styles.css" />
   <link rel="manifest" href="/manifest.webmanifest" />
   <link rel="icon" type="image/svg+xml" href="/icon.svg" />
-  <link rel="apple-touch-icon" href="/icon.svg" />
+  <!-- iOS ignores SVG here; it needs a PNG or the Home Screen icon is blank. -->
+  <link rel="apple-touch-icon" href="/icon-180.png" />
   <meta name="theme-color" content="#6366f1" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-title" content="Kanban" />
@@ -38,6 +39,8 @@
   </header>
 
   <main id="board"></main>
+
+  <div id="toasts"></div>
 
   <!-- Multi-select action bar -->
   <div id="bulk-bar" hidden>
